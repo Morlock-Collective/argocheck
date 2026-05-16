@@ -1,6 +1,6 @@
 # localargo
 
-Local validator and dry-runner for ArgoCD app-of-apps Helm structures.
+Local validator and dry-runner for ArgoCD app-of-apps Helm structures, including multi-source Applications.
 
 Point it at a root `kind: Application` manifest and it recursively renders the
 entire application tree using your local `helm` binary — no cluster, no ArgoCD

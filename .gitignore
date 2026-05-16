@@ -11,3 +11,4 @@ build/
 htmlcov/
 .mypy_cache/
 *.tmp/
+.tempcommitmessage
