@@ -9,7 +9,8 @@ spec:
     namespace: {{ .Values.guestbook.namespace }}
     server: https://kubernetes.default.svc
   source:
-    repoURL: {{ .Values.repoBase }}/guestbook
+    repoURL: {{ .Values.repoBase }}
+    path: guestbook
     targetRevision: {{ .Values.guestbook.targetRevision }}
     helm:
       releaseName: guestbook

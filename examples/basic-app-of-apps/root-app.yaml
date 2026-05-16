@@ -8,7 +8,8 @@ spec:
     namespace: argocd
     server: https://kubernetes.default.svc
   source:
-    repoURL: ./apps-chart
+    repoURL: "file:///LOCALARGO_EXAMPLES_PATH"
+    path: apps-chart
     targetRevision: HEAD
     helm:
       releaseName: apps

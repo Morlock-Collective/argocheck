@@ -9,7 +9,8 @@ spec:
     namespace: {{ .Values.podinfo.namespace }}
     server: https://kubernetes.default.svc
   source:
-    repoURL: {{ .Values.repoBase }}/podinfo
+    repoURL: {{ .Values.repoBase }}
+    path: podinfo
     targetRevision: {{ .Values.podinfo.targetRevision }}
     helm:
       releaseName: podinfo
