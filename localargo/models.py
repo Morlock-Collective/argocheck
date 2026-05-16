@@ -41,6 +41,8 @@ class AppNode:
     children: list[AppNode] = field(default_factory=list)
     # Non-Application resources rendered by this app's helm template(s)
     manifests: list[dict[str, Any]] = field(default_factory=list)
+    # The raw Application manifest dict this node was parsed from (None for root)
+    app_manifest: dict[str, Any] | None = None
     # Resolved chart directory of the primary (first) chart source
     chart_dir: Path | None = None
     error: Exception | None = None

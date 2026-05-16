@@ -134,7 +134,7 @@ def _render_file_browser() -> None:
 
 def _render_app_detail(node: AppNode) -> None:
     """Render the detail panel for a selected AppNode."""
-    col_title, col_status = st.columns([5, 1])
+    col_title, col_status, col_toggle = st.columns([4, 1, 2])
     with col_title:
         st.subheader(node.name)
         st.caption(f"namespace: `{node.namespace}`")
@@ -143,6 +143,9 @@ def _render_app_detail(node: AppNode) -> None:
             st.error("Failed")
         else:
             st.success("OK")
+    with col_toggle:
+        toggle_key = f"show_yaml_{node.name}"
+        show_yaml = st.toggle("Application YAML", key=toggle_key, value=False)
 
     if node.error:
         st.error(f"**Error:** {node.error}")
@@ -153,7 +156,12 @@ def _render_app_detail(node: AppNode) -> None:
             st.code(err.stderr.strip(), language="text")
         return
 
-    # Source(s) info
+    # Application manifest YAML view (toggled)
+    if show_yaml and node.app_manifest:
+        st.code(yaml.dump(node.app_manifest, default_flow_style=False, allow_unicode=True), language="yaml")
+        return
+
+    # Compact source(s) view
     label = f"Sources ({len(node.sources)})" if node.is_multi_source else "Source"
     with st.expander(label):
         for i, src in enumerate(node.sources):
