@@ -9,10 +9,10 @@ from typing import Any
 import streamlit as st
 import yaml
 
-from .helm import HelmError, check_helm
-from .models import AppNode
-from .parser import ParseError, load_yaml_file, parse_application
-from .walker import walk
+from localargo.helm import HelmError, check_helm
+from localargo.models import AppNode
+from localargo.parser import ParseError, load_yaml_file, parse_application
+from localargo.walker import walk
 
 # ── Page config ─────────────────────────────────────────────────────────────
 
