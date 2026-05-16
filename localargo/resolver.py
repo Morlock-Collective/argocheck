@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import hashlib
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -14,31 +13,52 @@ class ResolveError(Exception):
     pass
 
 
-def resolve_source(source: HelmSource, tmp_dir: Path, working_dir: Path | None = None) -> Path:
+def resolve_source(
+    source: HelmSource,
+    tmp_dir: Path,
+    working_dir: Path | None = None,
+    require_chart: bool = True,
+) -> Path:
     """
-    Return the local path to the chart directory for the given source.
+    Return the local path to the chart (or values) directory for the given source.
 
     working_dir is the directory of the parent chart (for resolving relative repoURLs).
+    require_chart=False skips the Chart.yaml check — used for ref-only value sources.
     """
     repo_url = source.repo_url
 
-    # Local path (absolute, relative, or file:// URI)
     if repo_url.startswith("file://"):
         repo_url = repo_url[len("file://"):]
 
     if _is_local(repo_url):
-        return _resolve_local(repo_url, source, working_dir)
+        return _resolve_local(repo_url, source, working_dir, require_chart)
 
-    # Helm chart repository (HTTP/HTTPS with chart name set, or OCI)
     if source.chart and (repo_url.startswith("oci://") or _is_http(repo_url)):
         return _resolve_helm_repo(source, tmp_dir)
 
-    # Git repository
     if _is_git(repo_url):
-        return _resolve_git(source, tmp_dir)
+        return _resolve_git(source, tmp_dir, require_chart)
 
-    # Fallback: treat as local
-    return _resolve_local(repo_url, source, working_dir)
+    return _resolve_local(repo_url, source, working_dir, require_chart)
+
+
+def resolve_ref_map(
+    sources: list[HelmSource],
+    tmp_dir: Path,
+    working_dir: Path | None = None,
+) -> dict[str, Path]:
+    """
+    Resolve all sources that have a `ref` field to local directories.
+    Returns a mapping of ref-name → local path, used to expand $ref/path in valueFiles.
+    """
+    ref_map: dict[str, Path] = {}
+    for src in sources:
+        if src.ref:
+            local_dir = resolve_source(
+                src, tmp_dir=tmp_dir, working_dir=working_dir, require_chart=False
+            )
+            ref_map[src.ref] = local_dir
+    return ref_map
 
 
 def _is_local(url: str) -> bool:
@@ -58,24 +78,24 @@ def _is_git(url: str) -> bool:
 
 
 def _looks_like_helm_repo(url: str) -> bool:
-    # Helm repos typically have /index.yaml; we can't easily tell without fetching.
-    # Heuristic: if chart is set alongside an HTTP URL, treat as helm repo.
     return True  # caller checks source.chart first
 
 
-def _resolve_local(repo_url: str, source: HelmSource, working_dir: Path | None) -> Path:
+def _resolve_local(
+    repo_url: str,
+    source: HelmSource,
+    working_dir: Path | None,
+    require_chart: bool,
+) -> Path:
     base = working_dir or Path.cwd()
     chart_base = Path(repo_url) if Path(repo_url).is_absolute() else base / repo_url
 
-    if source.path:
-        chart_path = chart_base / source.path
-    else:
-        chart_path = chart_base
-
+    chart_path = (chart_base / source.path) if source.path else chart_base
     chart_path = chart_path.resolve()
+
     if not chart_path.exists():
         raise ResolveError(f"Local chart path does not exist: {chart_path}")
-    if not (chart_path / "Chart.yaml").exists():
+    if require_chart and not (chart_path / "Chart.yaml").exists():
         raise ResolveError(f"No Chart.yaml found in {chart_path}")
     return chart_path
 
@@ -101,14 +121,13 @@ def _resolve_helm_repo(source: HelmSource, tmp_dir: Path) -> Path:
         pull_dir.mkdir(parents=True, exist_ok=True)
         helm_pull(chart_ref, version, pull_dir)
 
-    # After untar, the chart lives in a subdirectory named after the chart
     candidates = [p for p in pull_dir.iterdir() if p.is_dir() and (p / "Chart.yaml").exists()]
     if not candidates:
         raise ResolveError(f"helm pull did not produce a chart directory in {pull_dir}")
     return candidates[0]
 
 
-def _resolve_git(source: HelmSource, tmp_dir: Path) -> Path:
+def _resolve_git(source: HelmSource, tmp_dir: Path, require_chart: bool) -> Path:
     repo_url = source.repo_url
     revision = source.target_revision or "HEAD"
 
@@ -127,14 +146,11 @@ def _resolve_git(source: HelmSource, tmp_dir: Path) -> Path:
     except subprocess.CalledProcessError as e:
         raise ResolveError(f"git clone failed for {repo_url!r}:\n{e.stderr}")
 
-    if source.path:
-        chart_path = clone_dir / source.path
-    else:
-        chart_path = clone_dir
+    chart_path = (clone_dir / source.path) if source.path else clone_dir
 
     if not chart_path.exists():
         raise ResolveError(f"path {source.path!r} not found in cloned repo {repo_url}")
-    if not (chart_path / "Chart.yaml").exists():
+    if require_chart and not (chart_path / "Chart.yaml").exists():
         raise ResolveError(f"No Chart.yaml at {chart_path}")
 
     return chart_path

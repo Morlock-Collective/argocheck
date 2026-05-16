@@ -88,20 +88,25 @@ def _render_app_detail(node: AppNode) -> None:
             st.code(err.stderr.strip(), language="text")
         return
 
-    # Source info
-    with st.expander("Source"):
-        src = node.source
-        info: dict[str, Any] = {"repoURL": src.repo_url}
-        if src.chart:
-            info["chart"] = src.chart
-        if src.path:
-            info["path"] = src.path
-        info["targetRevision"] = src.target_revision
-        if src.release_name:
-            info["releaseName"] = src.release_name
-        if node.chart_dir:
-            info["resolvedChartDir"] = str(node.chart_dir)
-        st.code(yaml.dump(info, default_flow_style=False), language="yaml")
+    # Source(s) info
+    label = f"Sources ({len(node.sources)})" if node.is_multi_source else "Source"
+    with st.expander(label):
+        for i, src in enumerate(node.sources):
+            if node.is_multi_source:
+                st.markdown(f"**Source {i + 1}**" + (f" — ref: `{src.ref}`" if src.ref else ""))
+            info: dict[str, Any] = {"repoURL": src.repo_url}
+            if src.ref:
+                info["ref"] = src.ref
+            if src.chart:
+                info["chart"] = src.chart
+            if src.path:
+                info["path"] = src.path
+            info["targetRevision"] = src.target_revision
+            if src.release_name:
+                info["releaseName"] = src.release_name
+            if i == 0 and node.chart_dir:
+                info["resolvedChartDir"] = str(node.chart_dir)
+            st.code(yaml.dump(info, default_flow_style=False), language="yaml")
 
     # Child application links
     if node.children:

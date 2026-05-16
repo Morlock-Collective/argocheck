@@ -7,11 +7,11 @@ from typing import Any
 from .helm import HelmError, run_template
 from .models import AppNode, HelmSource
 from .parser import ParseError, parse_application
-from .resolver import ResolveError, resolve_source
+from .resolver import ResolveError, resolve_ref_map, resolve_source
 
 
-def _release_name(node: AppNode) -> str:
-    return node.source.release_name or node.name
+def _release_name(node: AppNode, source: HelmSource) -> str:
+    return source.release_name or node.name
 
 
 def walk(
@@ -42,32 +42,59 @@ def walk(
 
     _visited = _visited | {node.name}
 
-    # Resolve chart source to a local path
+    # Build the ref map from any sources that carry a `ref` field.
+    # These are value-only sources — they don't render a chart themselves.
     try:
-        chart_dir = resolve_source(
-            node.source,
-            tmp_dir=tmp_dir,
-            working_dir=_parent_chart_dir,
+        ref_map = resolve_ref_map(
+            node.sources, tmp_dir=tmp_dir, working_dir=_parent_chart_dir
         )
     except (ResolveError, HelmError) as e:
         node.error = e
         return node
 
-    node.chart_dir = chart_dir
+    # Identify the chart sources (sources without a ref, or with both ref and a chart/path).
+    chart_sources = [s for s in node.sources if not s.is_ref_only]
 
-    # Render the chart
-    try:
-        all_docs = run_template(
-            chart_path=chart_dir,
-            source=node.source,
-            release_name=_release_name(node),
-            namespace=node.namespace,
-            tmp_dir=tmp_dir,
-            argocd_env=argocd_env,
+    if not chart_sources:
+        node.error = RuntimeError(
+            f"Application {node.name!r}: no renderable chart source found "
+            f"(all sources are ref-only)"
         )
-    except HelmError as e:
-        node.error = e
         return node
+
+    # Render each chart source, combining their output onto this node.
+    all_docs: list[dict[str, Any]] = []
+    primary_chart_dir: Path | None = None
+
+    for source in chart_sources:
+        try:
+            chart_dir = resolve_source(
+                source, tmp_dir=tmp_dir, working_dir=_parent_chart_dir
+            )
+        except (ResolveError, HelmError) as e:
+            node.error = e
+            return node
+
+        if primary_chart_dir is None:
+            primary_chart_dir = chart_dir
+
+        try:
+            docs = run_template(
+                chart_path=chart_dir,
+                source=source,
+                release_name=_release_name(node, source),
+                namespace=node.namespace,
+                tmp_dir=tmp_dir,
+                argocd_env=argocd_env,
+                ref_map=ref_map,
+            )
+        except HelmError as e:
+            node.error = e
+            return node
+
+        all_docs.extend(docs)
+
+    node.chart_dir = primary_chart_dir
 
     # Split Application manifests from regular resources
     child_docs: list[dict[str, Any]] = []
@@ -82,11 +109,10 @@ def walk(
         try:
             child_node = parse_application(child_doc)
         except ParseError as e:
-            # Represent the failed parse as an error node
             dummy = AppNode(
                 name=child_doc.get("metadata", {}).get("name", "<unknown>"),
                 namespace=child_doc.get("metadata", {}).get("namespace", "default"),
-                source=HelmSource(repo_url=""),
+                sources=[HelmSource(repo_url="")],
                 error=e,
             )
             node.children.append(dummy)
@@ -99,7 +125,7 @@ def walk(
             max_depth=max_depth,
             _depth=_depth + 1,
             _visited=_visited,
-            _parent_chart_dir=chart_dir,
+            _parent_chart_dir=primary_chart_dir,
         )
         node.children.append(child_node)
 

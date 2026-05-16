@@ -5,8 +5,6 @@ from collections import Counter
 from typing import Any
 
 import yaml
-from rich import print as rprint
-from rich.columns import Columns
 from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax

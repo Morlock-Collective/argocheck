@@ -44,17 +44,21 @@ def parse_application(doc: dict[str, Any]) -> AppNode:
 
     spec = doc.get("spec") or {}
 
+    # Multi-source: spec.sources (list)
     if "sources" in spec:
-        raise ParseError(
-            f"Application {name!r} uses spec.sources (multi-source), which is not supported"
-        )
+        raw_sources = spec["sources"] or []
+        if not raw_sources:
+            raise ParseError(f"Application {name!r}: spec.sources is empty")
+        sources = [_parse_helm_source(name, s) for s in raw_sources]
+        return AppNode(name=name, namespace=namespace, sources=sources)
 
+    # Single source: spec.source
     raw_source = spec.get("source")
     if not raw_source:
-        raise ParseError(f"Application {name!r} has no spec.source")
+        raise ParseError(f"Application {name!r} has no spec.source or spec.sources")
 
     source = _parse_helm_source(name, raw_source)
-    return AppNode(name=name, namespace=namespace, source=source)
+    return AppNode(name=name, namespace=namespace, sources=[source])
 
 
 def _parse_helm_source(app_name: str, raw: dict[str, Any]) -> HelmSource:
@@ -62,6 +66,7 @@ def _parse_helm_source(app_name: str, raw: dict[str, Any]) -> HelmSource:
     if not repo_url:
         raise ParseError(f"Application {app_name!r}: spec.source.repoURL is required")
 
+    ref = raw.get("ref") or None
     chart = raw.get("chart") or None
     path = raw.get("path") or None
     target_revision = raw.get("targetRevision") or "HEAD"
@@ -73,12 +78,6 @@ def _parse_helm_source(app_name: str, raw: dict[str, Any]) -> HelmSource:
     values_object = helm_raw.get("valuesObject") or None
 
     value_files: list[str] = helm_raw.get("valueFiles") or []
-    for vf in value_files:
-        if vf.startswith("$"):
-            raise ParseError(
-                f"Application {app_name!r}: valueFile {vf!r} uses $ref syntax "
-                f"(multi-source values), which is not supported"
-            )
 
     raw_params: list[dict[str, Any]] = helm_raw.get("parameters") or []
     parameters = [
@@ -95,6 +94,7 @@ def _parse_helm_source(app_name: str, raw: dict[str, Any]) -> HelmSource:
 
     return HelmSource(
         repo_url=repo_url,
+        ref=ref,
         chart=chart,
         path=path,
         target_revision=target_revision,

@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from localargo.helm import run_template
-from localargo.models import HelmParameter, HelmSource
+from localargo.models import AppNode, HelmParameter, HelmSource
 from localargo.parser import load_yaml_file, parse_application
 from localargo.walker import walk
 
@@ -60,8 +60,7 @@ def test_helm_template_with_inline_values():
 def test_walk_simple_app():
     doc = load_yaml_file(FIXTURES / "root-app-simple.yaml")
     node = parse_application(doc)
-    # Point repoURL to absolute fixture path for the integration test
-    node.source.repo_url = str(FIXTURES / "simple-chart")
+    node.sources[0].repo_url = str(FIXTURES / "simple-chart")
 
     with tempfile.TemporaryDirectory() as tmp:
         result = walk(node, tmp_dir=Path(tmp))
@@ -75,13 +74,12 @@ def test_walk_simple_app():
 def test_walk_app_of_apps():
     doc = load_yaml_file(FIXTURES / "root-app-parent.yaml")
     node = parse_application(doc)
-    node.source.repo_url = str(FIXTURES / "parent-chart")
+    node.sources[0].repo_url = str(FIXTURES / "parent-chart")
 
     with tempfile.TemporaryDirectory() as tmp:
         result = walk(node, tmp_dir=Path(tmp))
 
     assert result.error is None
-    # Parent renders only Applications, no direct resources
     assert len(result.manifests) == 0
     assert len(result.children) == 1
 
@@ -90,18 +88,33 @@ def test_walk_app_of_apps():
     assert child.error is None
     assert len(child.manifests) == 1
     assert child.manifests[0]["kind"] == "ConfigMap"
-    # replicaCount=2 was passed via parameter from parent chart values
     assert child.manifests[0]["data"]["replicaCount"] == "2"
 
 
 def test_walk_cycle_detection():
-    from localargo.models import AppNode
-
     src = HelmSource(repo_url=str(FIXTURES / "simple-chart"))
-    node = AppNode(name="self-ref", namespace="default", source=src)
+    node = AppNode(name="self-ref", namespace="default", sources=[src])
 
     with tempfile.TemporaryDirectory() as tmp:
         result = walk(node, tmp_dir=Path(tmp), _visited={"self-ref"})
 
     assert result.error is not None
     assert "Cycle" in str(result.error)
+
+
+def test_walk_multi_source_with_ref_values():
+    """Multi-source app: one chart source + one ref source providing a values file."""
+    doc = load_yaml_file(FIXTURES / "root-app-multisource.yaml")
+    node = parse_application(doc)
+    # Point both sources to local fixture paths
+    node.sources[0].repo_url = str(FIXTURES / "simple-chart")
+    node.sources[1].repo_url = str(FIXTURES / "multisource-values")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        result = walk(node, tmp_dir=Path(tmp))
+
+    assert result.error is None
+    assert len(result.manifests) == 1
+    assert result.manifests[0]["kind"] == "Deployment"
+    # The ref values file sets replicaCount: 4
+    assert result.manifests[0]["spec"]["replicas"] == 4

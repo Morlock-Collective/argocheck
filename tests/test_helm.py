@@ -43,7 +43,6 @@ def test_inline_values_written_to_file():
         chart = Path("/chart")
         src = _source(values="foo: bar\n")
         cmd = build_template_cmd(chart, src, "r", "ns", tmp_dir)
-        # A -f flag should be present pointing to a tmp file
         assert "-f" in cmd
         f_idx = cmd.index("-f")
         values_file = Path(cmd[f_idx + 1])
@@ -58,7 +57,6 @@ def test_values_object_written_after_values():
         cmd = build_template_cmd(chart, src, "r", "ns", tmp_dir)
         f_flags = [cmd[i + 1] for i, v in enumerate(cmd) if v == "-f"]
         assert len(f_flags) == 2
-        # valuesObject file comes after values file
         assert "values-object" in f_flags[1]
 
 
@@ -82,3 +80,31 @@ def test_argocd_env_flags():
         joined = " ".join(cmd)
         assert "ARGOCD_APP_NAME=my-rel" in joined
         assert "ARGOCD_APP_NAMESPACE=my-ns" in joined
+
+
+def test_ref_value_file_resolved_via_ref_map():
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_dir = Path(tmp)
+        chart = Path("/chart")
+        values_dir = Path(tmp) / "values-repo"
+        values_dir.mkdir()
+        (values_dir / "prod.yaml").write_text("env: prod\n")
+
+        src = _source(value_files=["$vals/prod.yaml"])
+        ref_map = {"vals": values_dir}
+        cmd = build_template_cmd(chart, src, "r", "ns", tmp_dir, ref_map=ref_map)
+
+        f_flags = [cmd[i + 1] for i, v in enumerate(cmd) if v == "-f"]
+        assert len(f_flags) == 1
+        assert f_flags[0] == str((values_dir / "prod.yaml").resolve())
+
+
+def test_ref_value_file_unknown_ref_raises():
+    from localargo.helm import HelmError
+    with tempfile.TemporaryDirectory() as tmp:
+        src = _source(value_files=["$missing/prod.yaml"])
+        with pytest.raises(HelmError, match="unknown ref"):
+            build_template_cmd(Path("/c"), src, "r", "ns", Path(tmp), ref_map={})
+
+
+import pytest

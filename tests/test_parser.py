@@ -56,11 +56,19 @@ MULTISOURCE_APP = """
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: bad-app
+  name: multi-app
+  namespace: argocd
 spec:
   sources:
-    - repoURL: ./chart1
-    - repoURL: ./chart2
+    - repoURL: https://charts.example.com
+      chart: my-chart
+      targetRevision: "1.2.3"
+      helm:
+        valueFiles:
+          - $values/prod.yaml
+    - repoURL: https://github.com/my-org/my-values.git
+      targetRevision: main
+      ref: values
   destination:
     namespace: default
   project: default
@@ -72,6 +80,7 @@ def test_parse_minimal():
     node = parse_application(doc)
     assert node.name == "test-app"
     assert node.namespace == "argocd"
+    assert not node.is_multi_source
     assert node.source.repo_url == "./my-chart"
     assert node.source.target_revision == "HEAD"
     assert node.source.chart is None
@@ -105,10 +114,22 @@ def test_parse_wrong_kind():
         parse_application(doc)
 
 
-def test_parse_multisource_rejected():
+def test_parse_multisource():
     doc = yaml.safe_load(MULTISOURCE_APP)
-    with pytest.raises(ParseError, match="multi-source"):
-        parse_application(doc)
+    node = parse_application(doc)
+    assert node.name == "multi-app"
+    assert node.is_multi_source
+    assert len(node.sources) == 2
+
+    chart_src = node.sources[0]
+    assert chart_src.chart == "my-chart"
+    assert chart_src.value_files == ["$values/prod.yaml"]
+    assert chart_src.ref is None
+
+    ref_src = node.sources[1]
+    assert ref_src.ref == "values"
+    assert ref_src.repo_url == "https://github.com/my-org/my-values.git"
+    assert ref_src.is_ref_only
 
 
 def test_parse_all_applications_filters():
@@ -118,10 +139,8 @@ def test_parse_all_applications_filters():
     assert apps[0].name == "test-app"
 
 
-def test_parse_dollar_ref_value_file():
-    doc = yaml.safe_load(MINIMAL_APP.replace(
-        "repoURL: ./my-chart",
-        "repoURL: ./my-chart\n    helm:\n      valueFiles:\n        - $values/prod.yaml"
-    ))
-    with pytest.raises(ParseError, match="\\$ref"):
-        parse_application(doc)
+def test_parse_dollar_ref_value_file_allowed_in_multisource():
+    # $ref syntax is valid in multi-source context — parser should not reject it
+    doc = yaml.safe_load(MULTISOURCE_APP)
+    node = parse_application(doc)
+    assert node.sources[0].value_files == ["$values/prod.yaml"]

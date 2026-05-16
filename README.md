@@ -25,8 +25,6 @@ that was run.
 - No ApplicationSet support
 - No target cluster or server resolution — `spec.destination.namespace` is used as `--namespace` in `helm template`, but the server field is ignored
 - No Sync waves or Sync hooks (those resources are treated like any other)
-- No multi-source Applications (`spec.sources`)
-- No `$values` reference syntax in `valueFiles`
 
 ## Requirements
 
@@ -200,6 +198,8 @@ matching ArgoCD's behavior:
 
 ## Supported Application fields
 
+### Single-source (`spec.source`)
+
 ```yaml
 spec:
   source:
@@ -225,6 +225,35 @@ spec:
   destination:
     namespace: ...          # used as the --namespace flag in helm template
 ```
+
+### Multi-source (`spec.sources`)
+
+Multiple sources are fully supported. Each source is either a **chart source**
+(rendered by `helm template`) or a **ref source** (provides values files only).
+
+A source is a ref source when it has a `ref` field and no `chart` or `path`.
+Chart sources may use `$<ref>/path` in `valueFiles` to reference files from a
+ref source.
+
+```yaml
+spec:
+  sources:
+    - repoURL: https://charts.example.com
+      chart: my-app
+      targetRevision: "2.1.0"
+      helm:
+        valueFiles:
+          - $values/prod.yaml   # resolved from the "values" ref source below
+    - repoURL: https://github.com/my-org/my-values.git
+      targetRevision: main
+      ref: values               # makes this source available as $values
+  destination:
+    namespace: default
+```
+
+All non-Application resources from all chart sources are combined onto the same
+node in the tree. Each chart source is rendered with its own `releaseName` (or
+the application name if not set).
 
 `spec.destination.namespace` is passed as `--namespace` to `helm template`.
 The destination server and cluster fields are ignored.

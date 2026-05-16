@@ -15,6 +15,7 @@ class HelmParameter:
 @dataclass
 class HelmSource:
     repo_url: str
+    ref: str | None = None            # multi-source: alias for $ref resolution in valueFiles
     chart: str | None = None          # set for Helm chart repos (OCI/HTTP)
     path: str | None = None           # set for Git repos with a chart directory
     target_revision: str = "HEAD"
@@ -25,15 +26,30 @@ class HelmSource:
     parameters: list[HelmParameter] = field(default_factory=list)
     version: str | None = None        # helm API version hint
 
+    @property
+    def is_ref_only(self) -> bool:
+        """True when this source only provides values files (not a chart to render)."""
+        return bool(self.ref) and not self.chart and not self.path
+
 
 @dataclass
 class AppNode:
     name: str
     namespace: str
-    source: HelmSource
+    # Always at least one entry; multi-source apps have more than one.
+    sources: list[HelmSource]
     children: list[AppNode] = field(default_factory=list)
-    # Non-Application resources rendered by this app's helm template
+    # Non-Application resources rendered by this app's helm template(s)
     manifests: list[dict[str, Any]] = field(default_factory=list)
-    # Absolute path to the resolved chart directory (set during processing)
+    # Resolved chart directory of the primary (first) chart source
     chart_dir: Path | None = None
     error: Exception | None = None
+
+    @property
+    def source(self) -> HelmSource:
+        """Convenience accessor — returns the first source."""
+        return self.sources[0]
+
+    @property
+    def is_multi_source(self) -> bool:
+        return len(self.sources) > 1

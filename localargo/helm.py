@@ -42,16 +42,30 @@ def build_template_cmd(
     namespace: str,
     tmp_dir: Path,
     argocd_env: bool = False,
+    ref_map: dict[str, Path] | None = None,
 ) -> list[str]:
     """Build the `helm template` command list (does not execute it)."""
     cmd = ["helm", "template", release_name, str(chart_path)]
     cmd += ["--namespace", namespace]
     cmd.append("--include-crds")
 
-    # Value files — relative to chart root
+    ref_map = ref_map or {}
+
+    # Value files — relative to chart root, or resolved via $ref for multi-source
     for vf in source.value_files:
-        resolved = (chart_path / vf).resolve()
-        cmd += ["-f", str(resolved)]
+        if vf.startswith("$"):
+            ref_name, _, rel_path = vf[1:].partition("/")
+            if ref_name not in ref_map:
+                raise HelmError(
+                    f"valueFile {vf!r} references unknown ref {ref_name!r}. "
+                    f"Available refs: {list(ref_map)}",
+                    cmd=[],
+                )
+            resolved = (ref_map[ref_name] / rel_path).resolve()
+            cmd += ["-f", str(resolved)]
+        else:
+            resolved = (chart_path / vf).resolve()
+            cmd += ["-f", str(resolved)]
 
     # Inline values string → temp file
     if source.values:
@@ -91,11 +105,14 @@ def run_template(
     namespace: str,
     tmp_dir: Path,
     argocd_env: bool = False,
+    ref_map: dict[str, Path] | None = None,
 ) -> list[dict[str, Any]]:
     """Run `helm template` and return parsed YAML documents."""
     _maybe_update_dependencies(chart_path)
 
-    cmd = build_template_cmd(chart_path, source, release_name, namespace, tmp_dir, argocd_env)
+    cmd = build_template_cmd(
+        chart_path, source, release_name, namespace, tmp_dir, argocd_env, ref_map
+    )
 
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
