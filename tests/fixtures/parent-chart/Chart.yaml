@@ -1,0 +1,4 @@
+apiVersion: v2
+name: parent-chart
+description: App-of-apps parent chart
+version: 0.1.0

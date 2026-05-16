@@ -1,0 +1,4 @@
+apiVersion: v2
+name: child-chart
+description: A child chart used in app-of-apps tests
+version: 0.1.0

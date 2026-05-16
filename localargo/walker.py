@@ -1,0 +1,106 @@
+"""Recursive app-of-apps tree builder."""
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+from .helm import HelmError, run_template
+from .models import AppNode, HelmSource
+from .parser import ParseError, parse_application
+from .resolver import ResolveError, resolve_source
+
+
+def _release_name(node: AppNode) -> str:
+    return node.source.release_name or node.name
+
+
+def walk(
+    node: AppNode,
+    tmp_dir: Path,
+    *,
+    argocd_env: bool = False,
+    max_depth: int = 10,
+    _depth: int = 0,
+    _visited: set[str] | None = None,
+    _parent_chart_dir: Path | None = None,
+) -> AppNode:
+    """Recursively resolve, render, and populate an AppNode tree."""
+    if _visited is None:
+        _visited = set()
+
+    if _depth >= max_depth:
+        node.error = RuntimeError(
+            f"Max recursion depth ({max_depth}) reached at application {node.name!r}"
+        )
+        return node
+
+    if node.name in _visited:
+        node.error = RuntimeError(
+            f"Cycle detected: application {node.name!r} has already been processed"
+        )
+        return node
+
+    _visited = _visited | {node.name}
+
+    # Resolve chart source to a local path
+    try:
+        chart_dir = resolve_source(
+            node.source,
+            tmp_dir=tmp_dir,
+            working_dir=_parent_chart_dir,
+        )
+    except (ResolveError, HelmError) as e:
+        node.error = e
+        return node
+
+    node.chart_dir = chart_dir
+
+    # Render the chart
+    try:
+        all_docs = run_template(
+            chart_path=chart_dir,
+            source=node.source,
+            release_name=_release_name(node),
+            namespace=node.namespace,
+            tmp_dir=tmp_dir,
+            argocd_env=argocd_env,
+        )
+    except HelmError as e:
+        node.error = e
+        return node
+
+    # Split Application manifests from regular resources
+    child_docs: list[dict[str, Any]] = []
+    for doc in all_docs:
+        if doc.get("kind") == "Application" and doc.get("apiVersion", "").startswith("argoproj.io"):
+            child_docs.append(doc)
+        else:
+            node.manifests.append(doc)
+
+    # Recurse into child Applications
+    for child_doc in child_docs:
+        try:
+            child_node = parse_application(child_doc)
+        except ParseError as e:
+            # Represent the failed parse as an error node
+            dummy = AppNode(
+                name=child_doc.get("metadata", {}).get("name", "<unknown>"),
+                namespace=child_doc.get("metadata", {}).get("namespace", "default"),
+                source=HelmSource(repo_url=""),
+                error=e,
+            )
+            node.children.append(dummy)
+            continue
+
+        child_node = walk(
+            child_node,
+            tmp_dir=tmp_dir,
+            argocd_env=argocd_env,
+            max_depth=max_depth,
+            _depth=_depth + 1,
+            _visited=_visited,
+            _parent_chart_dir=chart_dir,
+        )
+        node.children.append(child_node)
+
+    return node
