@@ -26,9 +26,11 @@ st.set_page_config(
 _KEY_TREE = "tree"
 _KEY_SELECTED = "selected_app"
 _KEY_ERROR = "top_error"
+_KEY_FILE_INPUT = "root_app_path"   # text input widget key
+_KEY_BROWSER_DIR = "browser_dir"    # current directory shown in the file browser
 
 
-# ── Pure helpers (defined before rendering code) ─────────────────────────────
+# ── Pure helpers ─────────────────────────────────────────────────────────────
 
 def _flatten(node: AppNode, depth: int = 0) -> list[tuple[int, AppNode]]:
     result = [(depth, node)]
@@ -68,6 +70,66 @@ def _run_rendering(
         )
 
     return root_node, None
+
+
+def _render_file_browser() -> None:
+    """Inline filesystem browser. Selecting a YAML file writes its path into
+    the root-app text input (via shared session state) and collapses the picker."""
+    if _KEY_BROWSER_DIR not in st.session_state:
+        # Seed to the directory of whatever is already typed, or home
+        current_input = st.session_state.get(_KEY_FILE_INPUT, "")
+        seed = Path(current_input)
+        if seed.is_file():
+            st.session_state[_KEY_BROWSER_DIR] = str(seed.parent)
+        elif seed.is_dir():
+            st.session_state[_KEY_BROWSER_DIR] = str(seed)
+        else:
+            st.session_state[_KEY_BROWSER_DIR] = str(Path.home())
+
+    browser_dir = Path(st.session_state[_KEY_BROWSER_DIR])
+
+    # Breadcrumb / current path display
+    st.caption(str(browser_dir))
+
+    # Up button
+    parent = browser_dir.parent
+    if parent != browser_dir:
+        if st.button("↑  ..", key="browser_up", use_container_width=True):
+            st.session_state[_KEY_BROWSER_DIR] = str(parent)
+            st.rerun()
+
+    # List directory contents
+    try:
+        entries = sorted(browser_dir.iterdir(), key=lambda p: (p.is_file(), p.name.lower()))
+    except PermissionError:
+        st.error("Permission denied")
+        return
+
+    dirs = [e for e in entries if e.is_dir() and not e.name.startswith(".")]
+    yaml_files = [e for e in entries if e.is_file() and e.suffix in (".yaml", ".yml")]
+
+    for d in dirs:
+        if st.button(f"📁  {d.name}", key=f"bdir_{d}", use_container_width=True):
+            st.session_state[_KEY_BROWSER_DIR] = str(d)
+            st.rerun()
+
+    if yaml_files:
+        st.divider()
+
+    for f in yaml_files:
+        label = f"📄  {f.name}"
+        is_chosen = st.session_state.get(_KEY_FILE_INPUT) == str(f)
+        if st.button(
+            label,
+            key=f"bfile_{f}",
+            use_container_width=True,
+            type="primary" if is_chosen else "secondary",
+        ):
+            st.session_state[_KEY_FILE_INPUT] = str(f)
+            st.rerun()
+
+    if not dirs and not yaml_files:
+        st.caption("No directories or YAML files here.")
 
 
 def _render_app_detail(node: AppNode) -> None:
@@ -151,11 +213,16 @@ with st.sidebar:
     st.caption("Local ArgoCD app-of-apps validator")
     st.divider()
 
-    root_app_input = st.text_input(
+    # Text input — backed by session state so the file browser can populate it
+    st.text_input(
         "Root Application manifest",
         placeholder="/path/to/root-app.yaml",
         help="Path to a YAML file containing a kind:Application manifest.",
+        key=_KEY_FILE_INPUT,
     )
+
+    with st.expander("Browse…"):
+        _render_file_browser()
 
     with st.expander("Options"):
         argocd_env = st.checkbox(
@@ -178,7 +245,7 @@ with st.sidebar:
         flat = _flatten(st.session_state[_KEY_TREE])
         for depth, node in flat:
             icon = _status_icon(node)
-            indent = " " * (depth * 4)
+            indent = " " * (depth * 4)
             label = f"{indent}{icon} {node.name}"
             is_selected = st.session_state.get(_KEY_SELECTED) == node.name
             if st.button(
@@ -193,8 +260,9 @@ with st.sidebar:
 # ── Handle render button ─────────────────────────────────────────────────────
 
 if run_clicked:
+    root_app_input = st.session_state.get(_KEY_FILE_INPUT, "").strip()
     if not root_app_input:
-        st.session_state[_KEY_ERROR] = "Please enter a path to the root Application manifest."
+        st.session_state[_KEY_ERROR] = "Please select or enter a path to the root Application manifest."
         st.session_state.pop(_KEY_TREE, None)
     else:
         path = Path(root_app_input)
@@ -212,7 +280,7 @@ if run_clicked:
                 st.session_state.pop(_KEY_ERROR, None)
                 initial_flat = _flatten(tree)
                 st.session_state[_KEY_SELECTED] = initial_flat[0][1].name if initial_flat else None
-        st.rerun()
+    st.rerun()
 
 # ── Main panel ───────────────────────────────────────────────────────────────
 
@@ -224,8 +292,9 @@ elif _KEY_TREE not in st.session_state:
         """
         ## Getting started
 
-        Enter the path to your root ArgoCD `kind: Application` manifest in the
-        sidebar and click **Render**.
+        Select your root ArgoCD `kind: Application` manifest using the
+        **Browse…** picker in the sidebar (or type the path directly), then
+        click **Render**.
 
         localargo will recursively run `helm template` for every Application in
         the hierarchy and display the resulting resource tree here.
