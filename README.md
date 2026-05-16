@@ -41,10 +41,33 @@ git clone <this repo>
 cd localargo
 python -m venv .venv
 source .venv/bin/activate
-pip install -e .
+pip install -e .          # CLI only
+pip install -e ".[web]"   # CLI + web interface
 ```
 
 ## Usage
+
+### Web interface
+
+```bash
+localargo-web
+```
+
+Opens a browser-based UI at `http://localhost:8501`. Enter the path to your
+root Application manifest in the sidebar and click **Render**.
+
+The interface shows:
+- **Summary metrics** — total applications, resources, and error count
+- **Application tree** — clickable sidebar list of all apps, indented by depth,
+  with a ✓/✗ status indicator
+- **Detail panel** — for the selected app: source info, child app links, and
+  all rendered resources grouped by kind in tabs with syntax-highlighted YAML
+- **Error detail** — for failed apps: the error message and the exact
+  `helm template` command that was run
+
+Requires `pip install -e ".[web]"`.
+
+### CLI
 
 ```
 localargo [OPTIONS] ROOT_APP
