@@ -139,7 +139,10 @@ def _render_app_detail(node: AppNode) -> None:
         st.subheader(node.name)
         st.caption(f"namespace: `{node.namespace}`")
     with col_status:
-        st.error("Failed") if node.error else st.success("OK")
+        if node.error:
+            st.error("Failed")
+        else:
+            st.success("OK")
 
     if node.error:
         st.error(f"**Error:** {node.error}")
@@ -186,15 +189,19 @@ def _render_app_detail(node: AppNode) -> None:
     kinds = sorted({m.get("kind", "?") for m in node.manifests})
 
     if len(kinds) <= 10:
+        # Iterate over kinds so each tab context is entered exactly once
         tabs = st.tabs(kinds)
-        kind_to_tab = dict(zip(kinds, tabs))
-        for manifest in node.manifests:
-            kind = manifest.get("kind", "?")
-            name = (manifest.get("metadata") or {}).get("name", "?")
-            yaml_str = yaml.dump(manifest, default_flow_style=False, allow_unicode=True)
-            with kind_to_tab[kind]:
-                with st.expander(f"{kind}/{name}", expanded=False):
+        for tab, kind in zip(tabs, kinds):
+            kind_manifests = [m for m in node.manifests if m.get("kind", "?") == kind]
+            with tab:
+                for i, manifest in enumerate(kind_manifests):
+                    name = (manifest.get("metadata") or {}).get("name", "?")
+                    yaml_str = yaml.dump(manifest, default_flow_style=False, allow_unicode=True)
+                    if len(kind_manifests) > 1:
+                        st.caption(f"`{name}`")
                     st.code(yaml_str, language="yaml")
+                    if i < len(kind_manifests) - 1:
+                        st.divider()
     else:
         options = [
             f"{m.get('kind','?')}/{(m.get('metadata') or {}).get('name','?')}"
