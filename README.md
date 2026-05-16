@@ -262,5 +262,5 @@ The destination server and cluster fields are ignored.
 
 ```bash
 pip install -e ".[dev]"
-pytest
+pytest -v
 ```
