@@ -1,0 +1,4 @@
+apiVersion: v2
+name: guestbook
+description: Simple guestbook web application
+version: 0.1.0

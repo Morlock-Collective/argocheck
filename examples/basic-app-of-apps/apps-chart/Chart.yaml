@@ -1,0 +1,4 @@
+apiVersion: v2
+name: apps-chart
+description: App-of-apps umbrella chart — renders one Application per managed service
+version: 0.1.0

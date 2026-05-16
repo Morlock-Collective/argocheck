@@ -1,0 +1,24 @@
+{{- if .Values.guestbook.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: guestbook
+  namespace: argocd
+spec:
+  destination:
+    namespace: {{ .Values.guestbook.namespace }}
+    server: https://kubernetes.default.svc
+  source:
+    repoURL: {{ .Values.repoBase }}/guestbook
+    targetRevision: {{ .Values.guestbook.targetRevision }}
+    helm:
+      releaseName: guestbook
+      parameters:
+        - name: replicaCount
+          value: {{ .Values.guestbook.replicaCount | quote }}
+        - name: image.repository
+          value: {{ .Values.guestbook.image.repository }}
+        - name: image.tag
+          value: {{ .Values.guestbook.image.tag | quote }}
+  project: default
+{{- end }}

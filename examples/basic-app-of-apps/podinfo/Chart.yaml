@@ -1,0 +1,4 @@
+apiVersion: v2
+name: podinfo
+description: Minimal podinfo deployment
+version: 0.1.0

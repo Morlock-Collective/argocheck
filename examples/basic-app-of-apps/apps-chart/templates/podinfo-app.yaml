@@ -1,0 +1,24 @@
+{{- if .Values.podinfo.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: podinfo
+  namespace: argocd
+spec:
+  destination:
+    namespace: {{ .Values.podinfo.namespace }}
+    server: https://kubernetes.default.svc
+  source:
+    repoURL: {{ .Values.repoBase }}/podinfo
+    targetRevision: {{ .Values.podinfo.targetRevision }}
+    helm:
+      releaseName: podinfo
+      parameters:
+        - name: replicaCount
+          value: {{ .Values.podinfo.replicaCount | quote }}
+        - name: image.repository
+          value: {{ .Values.podinfo.image.repository }}
+        - name: image.tag
+          value: {{ .Values.podinfo.image.tag | quote }}
+  project: default
+{{- end }}

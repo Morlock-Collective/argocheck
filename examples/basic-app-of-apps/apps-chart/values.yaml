@@ -1,0 +1,22 @@
+# Absolute path to the basic-app-of-apps directory, expressed as a file:// URL.
+# Replace LOCALARGO_EXAMPLES_PATH with the real path after copying this example.
+# See README.md for the one-liner that does it automatically.
+repoBase: "file:///LOCALARGO_EXAMPLES_PATH"
+
+guestbook:
+  enabled: true
+  targetRevision: HEAD
+  namespace: default
+  replicaCount: 2
+  image:
+    repository: gcr.io/heptio-images/ks-guestbook-demo
+    tag: "0.2"
+
+podinfo:
+  enabled: true
+  targetRevision: HEAD
+  namespace: default
+  replicaCount: 1
+  image:
+    repository: ghcr.io/stefanprodan/podinfo
+    tag: "6.7.0"
