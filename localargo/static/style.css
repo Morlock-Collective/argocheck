@@ -235,3 +235,22 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
 /* ── YAML / code blocks ──────────────────────────────────────────────────── */
 .hljs { border-radius: 0; font-family: var(--mono); font-size: 0.82em; padding: 1rem; line-height: 1.5; }
 .yaml-standalone { border-radius: var(--radius); overflow: hidden; margin-bottom: 1rem; }
+
+.yaml-wrapper { position: relative; margin-bottom: 1rem; }
+.yaml-wrapper .yaml-standalone { margin-bottom: 0; }
+.copy-btn {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  z-index: 1;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.75rem;
+  font-family: var(--font);
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 4px;
+  color: #c9d1d9;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.copy-btn:hover { background: rgba(255,255,255,0.22); }

@@ -62,10 +62,24 @@ async function api(method, url, body) {
 
 const YamlBlock = {
   props: { content: { required: true } },
+  data() { return { copied: false }; },
   computed: {
-    html() { return highlightYaml(this.content); }
+    yamlStr() { return jsyaml.dump(this.content, { indent: 2, noRefs: true, lineWidth: -1 }); },
+    html()    { return hljs.highlight(this.yamlStr, { language: "yaml" }).value; },
   },
-  template: `<pre class="hljs yaml-standalone"><code v-html="html"></code></pre>`
+  methods: {
+    async copy() {
+      await navigator.clipboard.writeText(this.yamlStr);
+      this.copied = true;
+      setTimeout(() => { this.copied = false; }, 1500);
+    }
+  },
+  template: `
+    <div class="yaml-wrapper">
+      <button class="copy-btn" @click="copy">{{ copied ? "✓ Copied" : "Copy" }}</button>
+      <pre class="hljs yaml-standalone"><code v-html="html"></code></pre>
+    </div>
+  `
 };
 
 // ── ResourceViewer component ──────────────────────────────────────────────
