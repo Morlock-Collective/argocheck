@@ -215,7 +215,8 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
 .info-table td:last-child { font-family: var(--mono); word-break: break-all; }
 
 .children-info { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem; }
-.child-tag { display: inline-block; background: var(--primary-dim); color: var(--primary); border-radius: 4px; padding: 0.1rem 0.4rem; font-size: 0.8rem; font-family: var(--mono); margin: 0 0.2rem 0.2rem 0; }
+.child-tag { display: inline-block; background: var(--primary-dim); color: var(--primary); border: none; border-radius: 4px; padding: 0.1rem 0.4rem; font-size: 0.8rem; font-family: var(--mono); margin: 0 0.2rem 0.2rem 0; cursor: pointer; }
+.child-tag:hover { background: var(--primary); color: #fff; }
 
 /* ── Resource viewer ─────────────────────────────────────────────────────── */
 .resources-header { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.5rem; }

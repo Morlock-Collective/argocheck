@@ -128,6 +128,7 @@ const ResourceViewer = {
 const AppDetail = {
   components: { YamlBlock, ResourceViewer },
   props: { node: { type: Object, required: true } },
+  emits: ["selectApp"],
   setup(props) {
     const showYaml = ref(false);
     const sourceOpen = ref(false);
@@ -207,7 +208,8 @@ const AppDetail = {
           <!-- Child apps -->
           <div v-if="node.children && node.children.length" class="children-info">
             Child applications:
-            <span v-for="c in node.children" :key="c.name" class="child-tag">{{ c.name }}</span>
+            <button v-for="c in node.children" :key="c.name"
+                    class="child-tag" @click="$emit('selectApp', c.name)">{{ c.name }}</button>
           </div>
 
           <!-- Resources -->
@@ -491,7 +493,8 @@ createApp({
             </div>
           </div>
           <div class="divider"></div>
-          <app-detail v-if="selectedNode" :node="selectedNode" :key="selectedNode.name"></app-detail>
+          <app-detail v-if="selectedNode" :node="selectedNode" :key="selectedNode.name"
+                      @select-app="selectedApp = $event"></app-detail>
         </template>
 
       </main>
