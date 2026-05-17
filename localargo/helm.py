@@ -1,6 +1,8 @@
 """Helm binary wrapper: command construction and subprocess execution."""
 from __future__ import annotations
 
+import hashlib
+import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -158,6 +160,63 @@ def helm_pull(chart_ref: str, version: str | None, dest: Path, untar: bool = Tru
         raise HelmError(f"helm pull failed: {e.stderr}", cmd=cmd, stderr=e.stderr)
 
 
+def _read_helm_repos() -> dict[str, str]:
+    """Return {alias: url} for all repos registered in the local helm config."""
+    config_home = Path(
+        os.environ.get("HELM_CONFIG_HOME")
+        or os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "helm")
+    )
+    repos_file = config_home / "repositories.yaml"
+    try:
+        data = yaml.safe_load(repos_file.read_text()) or {}
+        return {r["name"]: r["url"] for r in (data.get("repositories") or []) if "name" in r}
+    except (FileNotFoundError, yaml.YAMLError, KeyError):
+        return {}
+
+
+def _ensure_dep_repos(dependencies: list[dict[str, Any]], chart_path: Path) -> None:
+    """
+    For each chart dependency:
+    - URL-based repos (http/https/oci) are auto-registered if not already present.
+    - Alias-based repos (@name / alias:name) must already be registered; a clear
+      error is raised listing every missing alias with the command to fix it.
+    """
+    registered = _read_helm_repos()           # {name: url}
+    registered_urls = set(registered.values())
+
+    missing_aliases: list[str] = []
+
+    for dep in dependencies:
+        repo = (dep.get("repository") or "").strip()
+        if not repo:
+            continue
+
+        if repo.startswith("@"):
+            alias = repo[1:]
+            if alias not in registered:
+                missing_aliases.append(alias)
+
+        elif repo.startswith("alias:"):
+            alias = repo[len("alias:"):]
+            if alias not in registered:
+                missing_aliases.append(alias)
+
+        elif repo.startswith(("http://", "https://", "oci://")):
+            if repo not in registered_urls:
+                slug = "localargo-dep-" + hashlib.sha1(repo.encode()).hexdigest()[:8]
+                helm_repo_add(slug, repo)
+                helm_repo_update()
+
+    if missing_aliases:
+        cmds = "  " + "\n  ".join(f"helm repo add {a} <URL>" for a in missing_aliases)
+        raise HelmError(
+            f"Chart at {chart_path} references unregistered helm repo alias(es): "
+            + ", ".join(f"@{a}" for a in missing_aliases)
+            + f"\nRegister them before running localargo:\n{cmds}",
+            cmd=[],
+        )
+
+
 def _deps_satisfied(charts_dir: Path) -> bool:
     """True when charts/ contains at least one real chart (archive or unpacked)."""
     if not charts_dir.exists():
@@ -177,11 +236,14 @@ def _maybe_update_dependencies(chart_path: Path) -> None:
     with open(chart_yaml) as f:
         chart_meta = yaml.safe_load(f) or {}
 
-    if not chart_meta.get("dependencies"):
+    dependencies: list[dict[str, Any]] = chart_meta.get("dependencies") or []
+    if not dependencies:
         return
 
     if _deps_satisfied(chart_path / "charts"):
         return
+
+    _ensure_dep_repos(dependencies, chart_path)
 
     cmd = ["helm", "dependency", "update", str(chart_path)]
     try:

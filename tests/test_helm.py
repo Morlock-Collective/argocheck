@@ -108,3 +108,45 @@ def test_ref_value_file_unknown_ref_raises():
 
 
 import pytest
+
+
+def test_ensure_dep_repos_raises_for_missing_alias(tmp_path, monkeypatch):
+    """Alias-based dependency with no matching registered repo raises HelmError."""
+    from localargo.helm import HelmError, _ensure_dep_repos
+
+    # Patch _read_helm_repos to return an empty registry
+    monkeypatch.setattr("localargo.helm._read_helm_repos", lambda: {})
+
+    deps = [{"name": "redis", "version": "17.0.0", "repository": "@myrepo"}]
+    with pytest.raises(HelmError, match="unregistered helm repo alias"):
+        _ensure_dep_repos(deps, tmp_path)
+
+
+def test_ensure_dep_repos_ok_when_alias_registered(tmp_path, monkeypatch):
+    """No error when the alias is already in the helm repo registry."""
+    from localargo.helm import _ensure_dep_repos
+
+    monkeypatch.setattr(
+        "localargo.helm._read_helm_repos",
+        lambda: {"myrepo": "https://charts.example.com"},
+    )
+
+    deps = [{"name": "redis", "version": "17.0.0", "repository": "@myrepo"}]
+    _ensure_dep_repos(deps, tmp_path)  # must not raise
+
+
+def test_ensure_dep_repos_auto_registers_url(tmp_path, monkeypatch):
+    """URL-based dependency is auto-registered when not in the registry."""
+    from localargo.helm import _ensure_dep_repos
+
+    added = []
+    monkeypatch.setattr("localargo.helm._read_helm_repos", lambda: {})
+    monkeypatch.setattr("localargo.helm.helm_repo_add", lambda name, url: added.append((name, url)))
+    monkeypatch.setattr("localargo.helm.helm_repo_update", lambda: None)
+
+    url = "https://charts.bitnami.com/bitnami"
+    deps = [{"name": "nginx", "version": "18.0.0", "repository": url}]
+    _ensure_dep_repos(deps, tmp_path)
+
+    assert len(added) == 1
+    assert added[0][1] == url
