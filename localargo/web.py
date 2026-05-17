@@ -1,6 +1,7 @@
 """Streamlit web interface for localargo."""
 from __future__ import annotations
 
+import html as _html
 import tempfile
 from collections import Counter
 from pathlib import Path
@@ -40,7 +41,50 @@ def _flatten(node: AppNode, depth: int = 0) -> list[tuple[int, AppNode]]:
 
 
 def _status_icon(node: AppNode) -> str:
-    return "✗" if node.error else "✓"
+    return "❌" if node.error else "✅"
+
+
+def _tree_prefixes(flat: list[tuple[int, AppNode]]) -> list[str]:
+    """Return a tree-drawing prefix string for each node in the flat list.
+
+    Uses box-drawing characters (├─, └─, │) with non-breaking spaces so
+    browsers don't collapse the whitespace inside button labels.
+    """
+    n = len(flat)
+    nbsp = " "  # non-breaking space — won't collapse in HTML
+
+    # Precompute whether each node is the last sibling at its depth.
+    is_last: list[bool] = []
+    for i, (depth, _) in enumerate(flat):
+        last = True
+        for j in range(i + 1, n):
+            if flat[j][0] <= depth:
+                last = flat[j][0] < depth
+                break
+        is_last.append(last)
+
+    prefixes: list[str] = []
+    for i, (depth, _) in enumerate(flat):
+        if depth == 0:
+            prefixes.append("")
+            continue
+
+        parts: list[str] = []
+        # For each intermediate depth column, check whether the nearest ancestor
+        # at that depth was itself a last child (→ no vertical bar) or not.
+        for col in range(1, depth):
+            ancestor_last = True
+            for k in range(i - 1, -1, -1):
+                if flat[k][0] == col:
+                    ancestor_last = is_last[k]
+                    break
+            parts.append(f"{nbsp}{nbsp}{nbsp}{nbsp}" if ancestor_last else f"│{nbsp}{nbsp}{nbsp}")
+
+        connector = f"└─{nbsp}" if is_last[i] else f"├─{nbsp}"
+        parts.append(connector)
+        prefixes.append("".join(parts))
+
+    return prefixes
 
 
 def _run_rendering(
@@ -153,7 +197,21 @@ def _render_app_detail(node: AppNode) -> None:
         if hasattr(err, "cmd") and err.cmd:
             st.code(" ".join(str(c) for c in err.cmd), language="bash")
         if hasattr(err, "stderr") and err.stderr:
-            st.code(err.stderr.strip(), language="text")
+            st.markdown(
+                "<pre style='"
+                "white-space: pre-wrap;"
+                "word-break: break-word;"
+                "overflow-x: hidden;"
+                "font-size: 0.8em;"
+                "padding: 0.6rem 0.8rem;"
+                "border-radius: 4px;"
+                "background: rgba(255,75,75,0.08);"
+                "border-left: 3px solid #ff4b4b;"
+                "'>"
+                + _html.escape(err.stderr.strip())
+                + "</pre>",
+                unsafe_allow_html=True,
+            )
         return
 
     # Application manifest YAML view (toggled)
@@ -258,10 +316,10 @@ with st.sidebar:
         st.divider()
         st.subheader("Applications")
         flat = _flatten(st.session_state[_KEY_TREE])
-        for depth, node in flat:
+        prefixes = _tree_prefixes(flat)
+        for (depth, node), prefix in zip(flat, prefixes):
             icon = _status_icon(node)
-            indent = " " * (depth * 4)
-            label = f"{indent}{icon} {node.name}"
+            label = f"{prefix}{icon} {node.name}"
             is_selected = st.session_state.get(_KEY_SELECTED) == node.name
             if st.button(
                 label,
