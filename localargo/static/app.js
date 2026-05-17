@@ -1,0 +1,500 @@
+"use strict";
+const { createApp, ref, computed, watch, onMounted } = Vue;
+
+// ── Utilities ─────────────────────────────────────────────────────────────
+
+function basename(p) { return p.split("/").pop() || p; }
+function dirname(p)  { const parts = p.split("/"); parts.pop(); return parts.join("/") || "/"; }
+
+function flattenTree(node, depth = 0) {
+  const out = [{ depth, node }];
+  for (const c of (node.children || [])) out.push(...flattenTree(c, depth + 1));
+  return out;
+}
+
+function computeTreePrefixes(flat) {
+  const n = flat.length;
+  const NB = " "; // non-breaking space — won't collapse in HTML
+
+  const isLast = flat.map((_, i) => {
+    const d = flat[i].depth;
+    for (let j = i + 1; j < n; j++) {
+      if (flat[j].depth <= d) return flat[j].depth < d;
+    }
+    return true;
+  });
+
+  return flat.map(({ depth }, i) => {
+    if (depth === 0) return "";
+    const parts = [];
+    for (let col = 1; col < depth; col++) {
+      let ancLast = true;
+      for (let k = i - 1; k >= 0; k--) {
+        if (flat[k].depth === col) { ancLast = isLast[k]; break; }
+      }
+      parts.push(ancLast ? `${NB}${NB}${NB}${NB}` : `│${NB}${NB}${NB}`);
+    }
+    parts.push(isLast[i] ? `└─${NB}` : `├─${NB}`);
+    return parts.join("");
+  });
+}
+
+function findNode(flat, name) {
+  return flat.find(({ node }) => node.name === name)?.node ?? null;
+}
+
+function highlightYaml(obj) {
+  const str = jsyaml.dump(obj, { indent: 2, noRefs: true, lineWidth: -1 });
+  return hljs.highlight(str, { language: "yaml" }).value;
+}
+
+async function api(method, url, body) {
+  const opts = { method, headers: {} };
+  if (body !== undefined) {
+    opts.headers["Content-Type"] = "application/json";
+    opts.body = JSON.stringify(body);
+  }
+  const r = await fetch(url, opts);
+  return r.json();
+}
+
+// ── YamlBlock component ───────────────────────────────────────────────────
+
+const YamlBlock = {
+  props: { content: { required: true } },
+  computed: {
+    html() { return highlightYaml(this.content); }
+  },
+  template: `<pre class="hljs yaml-standalone"><code v-html="html"></code></pre>`
+};
+
+// ── ResourceViewer component ──────────────────────────────────────────────
+
+const ResourceViewer = {
+  components: { YamlBlock },
+  props: { manifests: { type: Array, required: true } },
+  setup(props) {
+    const activeKind = ref(null);
+    const openResources = ref(new Set());
+
+    const kinds = computed(() => [...new Set(props.manifests.map(m => m.kind ?? "?"))].sort());
+    const currentKind = computed(() => activeKind.value ?? kinds.value[0] ?? null);
+    const activeManifests = computed(() =>
+      props.manifests.filter(m => (m.kind ?? "?") === currentKind.value)
+    );
+
+    function resKey(m) {
+      return `${m.kind}/${m.metadata?.name ?? "?"}`;
+    }
+    function resName(m) { return m.metadata?.name ?? "?"; }
+    function toggleRes(key) {
+      const s = new Set(openResources.value);
+      s.has(key) ? s.delete(key) : s.add(key);
+      openResources.value = s;
+    }
+    function isOpen(key) { return openResources.value.has(key); }
+
+    watch(() => props.manifests, () => { activeKind.value = null; openResources.value = new Set(); });
+
+    return { kinds, currentKind, activeManifests, activeKind, resKey, resName, toggleRes, isOpen };
+  },
+  template: `
+    <div>
+      <div v-if="manifests.length === 0" style="color:var(--text-muted);font-size:0.85rem;">
+        No non-Application resources rendered by this app.
+      </div>
+      <template v-else>
+        <div class="kind-tabs">
+          <button v-for="k in kinds" :key="k" class="kind-tab"
+                  :class="{active: k === currentKind}"
+                  @click="activeKind = k">{{ k }}</button>
+        </div>
+        <div v-for="m in activeManifests" :key="resKey(m)" class="resource-item">
+          <div class="resource-item-header" @click="toggleRes(resKey(m))">
+            <span>{{ resName(m) }}</span>
+            <i class="resource-chevron" :class="{open: isOpen(resKey(m))}">›</i>
+          </div>
+          <div v-if="isOpen(resKey(m))" class="resource-yaml">
+            <yaml-block :content="m"></yaml-block>
+          </div>
+        </div>
+      </template>
+    </div>
+  `
+};
+
+// ── AppDetail component ───────────────────────────────────────────────────
+
+const AppDetail = {
+  components: { YamlBlock, ResourceViewer },
+  props: { node: { type: Object, required: true } },
+  setup(props) {
+    const showYaml = ref(false);
+    const sourceOpen = ref(false);
+    watch(() => props.node.name, () => { showYaml.value = false; sourceOpen.value = false; });
+
+    const sourceLabel = computed(() =>
+      props.node.isMultiSource ? `Sources (${props.node.sources.length})` : "Source"
+    );
+    function sourceRows(src) {
+      const rows = [["repoURL", src.repoURL]];
+      if (src.chart) rows.push(["chart", src.chart]);
+      if (src.path) rows.push(["path", src.path]);
+      rows.push(["targetRevision", src.targetRevision]);
+      if (src.releaseName) rows.push(["releaseName", src.releaseName]);
+      return rows;
+    }
+    return { showYaml, sourceOpen, sourceLabel, sourceRows };
+  },
+  template: `
+    <div>
+      <!-- Header -->
+      <div class="detail-header">
+        <div class="detail-title">
+          <h2>{{ node.name }}</h2>
+          <div class="ns">namespace: {{ node.namespace }}</div>
+        </div>
+        <div class="detail-actions">
+          <button v-if="node.appManifest" class="btn btn-sm"
+                  @click="showYaml = !showYaml">
+            {{ showYaml ? "Compact view" : "Application YAML" }}
+          </button>
+          <span class="status-badge" :class="node.error ? 'err' : 'ok'">
+            {{ node.error ? "❌ Failed" : "✅ OK" }}
+          </span>
+        </div>
+      </div>
+
+      <!-- Application YAML view -->
+      <yaml-block v-if="showYaml && node.appManifest" :content="node.appManifest"></yaml-block>
+
+      <!-- Compact view -->
+      <template v-else>
+
+        <!-- Error -->
+        <div v-if="node.error" class="error-panel">
+          <div class="error-msg">{{ node.error.message }}</div>
+          <template v-if="node.error.cmd">
+            <div class="error-block-label">Command</div>
+            <div class="cmd-block">{{ node.error.cmd }}</div>
+          </template>
+          <template v-if="node.error.stderr">
+            <div class="error-block-label">Output</div>
+            <div class="stderr-block">{{ node.error.stderr }}</div>
+          </template>
+        </div>
+
+        <template v-else>
+          <!-- Sources (collapsible) -->
+          <div class="collapsible">
+            <button class="collapsible-header" @click="sourceOpen = !sourceOpen">
+              <i>{{ sourceOpen ? "▾" : "▸" }}</i> {{ sourceLabel }}
+            </button>
+            <div v-if="sourceOpen" class="collapsible-body">
+              <div v-for="(src, i) in node.sources" :key="i" class="source-block">
+                <div v-if="node.isMultiSource" class="source-num">
+                  Source {{ i + 1 }}{{ src.ref ? " — ref: " + src.ref : "" }}
+                </div>
+                <table class="info-table">
+                  <tr v-for="[k,v] in sourceRows(src)" :key="k">
+                    <td>{{ k }}</td><td>{{ v }}</td>
+                  </tr>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Child apps -->
+          <div v-if="node.children && node.children.length" class="children-info">
+            Child applications:
+            <span v-for="c in node.children" :key="c.name" class="child-tag">{{ c.name }}</span>
+          </div>
+
+          <!-- Resources -->
+          <div class="resources-header">
+            Resources ({{ (node.manifests || []).length }})
+          </div>
+          <resource-viewer :manifests="node.manifests || []"></resource-viewer>
+        </template>
+
+      </template>
+    </div>
+  `
+};
+
+// ── FileBrowser component ─────────────────────────────────────────────────
+
+const FileBrowser = {
+  props: { seedPath: { type: String, default: "" } },
+  emits: ["select"],
+  setup(props, { emit }) {
+    const contents = ref({ current: "", parent: null, dirs: [], files: [], error: null });
+
+    async function browseTo(path) {
+      contents.value = await api("GET", `/api/browse?path=${encodeURIComponent(path)}`);
+    }
+
+    onMounted(() => {
+      const seed = props.seedPath ? dirname(props.seedPath) : "~";
+      browseTo(seed);
+    });
+
+    watch(() => props.seedPath, (v) => { if (v) browseTo(dirname(v)); });
+
+    function selectFile(f) {
+      emit("select", f);
+    }
+
+    return { contents, browseTo, selectFile };
+  },
+  template: `
+    <div>
+      <div class="browser-path">{{ contents.current }}</div>
+      <button v-if="contents.parent" class="btn btn-ghost browser-item"
+              @click="browseTo(contents.parent)">↑ ..</button>
+      <div v-if="contents.error" style="color:var(--error);font-size:0.8rem;">{{ contents.error }}</div>
+      <template v-for="d in contents.dirs" :key="d">
+        <button class="btn btn-ghost browser-item" @click="browseTo(d)" :title="d">
+          📁 {{ d.split('/').pop() }}
+        </button>
+      </template>
+      <div v-if="contents.files && contents.files.length" class="browser-divider"></div>
+      <template v-for="f in contents.files" :key="f">
+        <button class="btn btn-ghost browser-item"
+                :class="{ 'is-selected': f === seedPath }"
+                @click="selectFile(f)" :title="f">
+          📄 {{ f.split('/').pop() }}
+        </button>
+      </template>
+      <div v-if="!contents.dirs?.length && !contents.files?.length && !contents.error"
+           style="color:var(--text-muted);font-size:0.82rem;">
+        No directories or YAML files here.
+      </div>
+    </div>
+  `
+};
+
+// ── Root App ──────────────────────────────────────────────────────────────
+
+createApp({
+  components: { FileBrowser, AppDetail },
+
+  setup() {
+    // ── State
+    const rootPath    = ref("");
+    const recents     = ref([]);
+    const isRendering = ref(false);
+    const renderResult = ref(null);   // { ok, tree, error }
+    const topError    = ref(null);
+    const selectedApp = ref(null);
+    const options     = ref({ argocdEnv: false, maxDepth: 10 });
+
+    // Sidebar section open/closed
+    const sections = ref({ recents: true, browser: false, options: false });
+
+    // ── Derived
+    const flat = computed(() =>
+      renderResult.value?.tree ? flattenTree(renderResult.value.tree) : []
+    );
+    const prefixes = computed(() => computeTreePrefixes(flat.value));
+
+    const selectedNode = computed(() => {
+      if (!flat.value.length) return null;
+      if (selectedApp.value) {
+        const found = findNode(flat.value, selectedApp.value);
+        if (found) return found;
+      }
+      return flat.value[0]?.node ?? null;
+    });
+
+    const totalApps      = computed(() => flat.value.length);
+    const totalResources = computed(() => flat.value.reduce((s, { node }) => s + (node.manifests?.length ?? 0), 0));
+    const totalErrors    = computed(() => flat.value.filter(({ node }) => node.error).length);
+
+    // ── Actions
+    async function loadRecents() {
+      recents.value = await api("GET", "/api/recents");
+    }
+
+    async function removeRecent(path) {
+      await api("DELETE", `/api/recents?path=${encodeURIComponent(path)}`);
+      await loadRecents();
+    }
+
+    function selectPath(path) {
+      rootPath.value = path;
+      sections.value.recents = false;
+      sections.value.browser = false;
+    }
+
+    function onBrowserSelect(path) {
+      rootPath.value = path;
+      sections.value.browser = false;
+    }
+
+    async function doRender() {
+      if (!rootPath.value.trim() || isRendering.value) return;
+      isRendering.value = true;
+      topError.value = null;
+      renderResult.value = null;
+      selectedApp.value = null;
+      try {
+        const result = await api("POST", "/api/render", {
+          path: rootPath.value.trim(),
+          argocd_env: options.value.argocdEnv,
+          max_depth: options.value.maxDepth,
+        });
+        if (!result.ok) {
+          topError.value = result.error;
+        } else {
+          renderResult.value = result;
+          selectedApp.value = result.tree?.name ?? null;
+          await loadRecents();
+        }
+      } catch (e) {
+        topError.value = String(e);
+      } finally {
+        isRendering.value = false;
+      }
+    }
+
+    onMounted(loadRecents);
+
+    return {
+      rootPath, recents, isRendering, renderResult, topError,
+      selectedApp, options, sections,
+      flat, prefixes, selectedNode,
+      totalApps, totalResources, totalErrors,
+      loadRecents, removeRecent, selectPath, onBrowserSelect, doRender,
+      basename, dirname,
+    };
+  },
+
+  template: `
+    <div class="layout">
+
+      <!-- ── Sidebar ── -->
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <span class="logo-icon">⎈</span>
+          <span class="logo">localargo</span>
+        </div>
+
+        <!-- Path input -->
+        <div class="path-section">
+          <label class="path-label">Root Application manifest</label>
+          <input class="path-input" v-model="rootPath"
+                 placeholder="/path/to/root-app.yaml"
+                 @keyup.enter="doRender">
+        </div>
+
+        <!-- Recent files -->
+        <div class="sidebar-section" v-if="recents.length">
+          <button class="section-header" @click="sections.recents = !sections.recents">
+            Recent ({{ recents.length }})
+            <i class="section-chevron" :class="{open: sections.recents}">›</i>
+          </button>
+          <div v-if="sections.recents" class="section-body">
+            <div v-for="p in recents" :key="p" class="recent-item">
+              <button class="btn btn-ghost recent-pick" @click="selectPath(p)" :title="p">
+                <div class="recent-name">📄 {{ basename(p) }}</div>
+                <div class="recent-dir">{{ dirname(p) }}</div>
+              </button>
+              <button class="btn-icon" @click="removeRecent(p)" title="Remove">✕</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- File browser -->
+        <div class="sidebar-section">
+          <button class="section-header" @click="sections.browser = !sections.browser">
+            Browse…
+            <i class="section-chevron" :class="{open: sections.browser}">›</i>
+          </button>
+          <div v-if="sections.browser" class="section-body">
+            <file-browser :seed-path="rootPath" @select="onBrowserSelect"></file-browser>
+          </div>
+        </div>
+
+        <!-- Options -->
+        <div class="sidebar-section">
+          <button class="section-header" @click="sections.options = !sections.options">
+            Options
+            <i class="section-chevron" :class="{open: sections.options}">›</i>
+          </button>
+          <div v-if="sections.options" class="section-body">
+            <div class="option-row">
+              <input type="checkbox" v-model="options.argocdEnv" id="opt-env">
+              <label for="opt-env">Inject ARGOCD_APP_* dummy values</label>
+            </div>
+            <div class="option-row">
+              <label for="opt-depth">Max recursion depth</label>
+              <input id="opt-depth" type="number" v-model.number="options.maxDepth" min="1" max="50">
+            </div>
+          </div>
+        </div>
+
+        <!-- Render button -->
+        <button class="btn btn-primary render-btn"
+                @click="doRender"
+                :disabled="isRendering || !rootPath.trim()">
+          {{ isRendering ? "Rendering…" : "Render" }}
+        </button>
+
+        <!-- App tree -->
+        <div v-if="flat.length" class="tree-section">
+          <div class="tree-label">Applications</div>
+          <button v-for="({depth, node}, i) in flat" :key="node.name"
+                  class="tree-item"
+                  :class="{active: node.name === (selectedNode && selectedNode.name)}"
+                  @click="selectedApp = node.name">
+            <span class="tree-prefix">{{ prefixes[i] }}</span>
+            <span>{{ node.error ? "❌" : "✅" }}</span>
+            <span class="tree-name">{{ node.name }}</span>
+          </button>
+        </div>
+      </aside>
+
+      <!-- ── Main content ── -->
+      <main class="main">
+
+        <div v-if="isRendering" class="loading">
+          <div class="spinner"></div>
+          <p>Running helm template…</p>
+        </div>
+
+        <div v-else-if="topError" class="top-error">
+          <h3>Error</h3>
+          <p>{{ topError }}</p>
+        </div>
+
+        <div v-else-if="!renderResult" class="welcome">
+          <div style="font-size:2.5rem">⎈</div>
+          <h2>Getting started</h2>
+          <p>Select a root <code>kind:Application</code> manifest using Browse… or by typing the path, then click <strong>Render</strong>.</p>
+          <p style="color:var(--text-muted)">Requires <code>helm</code> on your PATH.</p>
+        </div>
+
+        <template v-else>
+          <div class="metrics">
+            <div class="metric">
+              <div class="metric-value">{{ totalApps }}</div>
+              <div class="metric-label">Applications</div>
+            </div>
+            <div class="metric">
+              <div class="metric-value">{{ totalResources }}</div>
+              <div class="metric-label">Resources</div>
+            </div>
+            <div class="metric" :class="{'has-errors': totalErrors > 0}">
+              <div class="metric-value">{{ totalErrors }}</div>
+              <div class="metric-label">Errors</div>
+            </div>
+          </div>
+          <div class="divider"></div>
+          <app-detail v-if="selectedNode" :node="selectedNode" :key="selectedNode.name"></app-detail>
+        </template>
+
+      </main>
+    </div>
+  `
+}).mount("#app");
