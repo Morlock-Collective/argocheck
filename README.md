@@ -39,8 +39,7 @@ git clone <this repo>
 cd localargo
 python -m venv .venv
 source .venv/bin/activate
-pip install -e .          # CLI only
-pip install -e ".[web]"   # CLI + web interface
+pip install -e .          # installs CLI and web interface
 ```
 
 ## Usage
@@ -51,19 +50,19 @@ pip install -e ".[web]"   # CLI + web interface
 localargo-web
 ```
 
-Opens a browser-based UI at `http://localhost:8501`. Enter the path to your
-root Application manifest in the sidebar and click **Render**.
+Starts a local web server on `http://localhost:8765` and opens it in your
+browser. The interface is a Vue 3 single-page app served directly by the
+backend — no separate deployment or build step required.
 
-The interface shows:
-- **Summary metrics** — total applications, resources, and error count
-- **Application tree** — clickable sidebar list of all apps, indented by depth,
-  with a ✓/✗ status indicator
-- **Detail panel** — for the selected app: source info, child app links, and
-  all rendered resources grouped by kind in tabs with syntax-highlighted YAML
-- **Error detail** — for failed apps: the error message and the exact
-  `helm template` command that was run
-
-Requires `pip install -e ".[web]"`.
+The interface provides:
+- **Sidebar** — path input, recent-files list, filesystem browser, options
+  (argocd-env toggle, max-depth), and the application tree with `├─`/`└─`
+  hierarchy lines and ✅/❌ status icons
+- **Detail panel** — source info, child app links, resources grouped by kind
+  with collapsible syntax-highlighted YAML per resource
+- **Application YAML toggle** — switches between the compact source view and
+  the raw Application manifest YAML
+- **Error display** — the failing helm command and wrapped stderr output
 
 ### CLI
 
