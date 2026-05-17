@@ -102,6 +102,22 @@ def test_walk_cycle_detection():
     assert "Cycle" in str(result.error)
 
 
+def test_walk_plain_manifests():
+    """Plain directory source (no Chart.yaml): YAML files are read directly."""
+    doc = load_yaml_file(FIXTURES / "root-app-plain.yaml")
+    node = parse_application(doc)
+    node.sources[0].repo_url = str(FIXTURES / "plain-manifests")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        result = walk(node, tmp_dir=Path(tmp))
+
+    assert result.error is None
+    kinds = {m["kind"] for m in result.manifests}
+    assert kinds == {"Namespace", "ConfigMap"}
+    # Files from both top-level and subdirectory are included
+    assert len(result.manifests) == 2
+
+
 def test_walk_multi_source_with_ref_values():
     """Multi-source app: one chart source + one ref source providing a values file."""
     doc = load_yaml_file(FIXTURES / "root-app-multisource.yaml")

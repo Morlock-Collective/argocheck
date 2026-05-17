@@ -1,0 +1,13 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: plain-app
+  namespace: argocd
+spec:
+  destination:
+    namespace: my-namespace
+    server: https://kubernetes.default.svc
+  source:
+    repoURL: ./plain-manifests
+    targetRevision: HEAD
+  project: default

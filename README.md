@@ -11,7 +11,7 @@ installation required.
 localargo walks an ArgoCD Application hierarchy the same way ArgoCD would:
 
 1. Reads the root Application manifest
-2. Runs `helm template` with the configured values, parameters, and value files
+2. Renders the source — runs `helm template` if the source is a Helm chart (has `Chart.yaml`), or reads all YAML files directly if it is a plain manifest directory
 3. Finds any `kind: Application` resources in the rendered output
 4. Recurses into each child Application
 5. Displays the full resource tree with per-app resource summaries

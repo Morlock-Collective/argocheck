@@ -4,6 +4,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from .helm import HelmError, run_template
 from .models import AppNode, HelmSource
 from .parser import ParseError, parse_application
@@ -12,6 +14,52 @@ from .resolver import ResolveError, resolve_ref_map, resolve_source
 
 def _release_name(node: AppNode, source: HelmSource) -> str:
     return source.release_name or node.name
+
+
+def _read_plain_manifests(directory: Path) -> list[dict[str, Any]]:
+    """Read and parse all YAML files from a plain-manifest directory."""
+    docs: list[dict[str, Any]] = []
+    yaml_files = sorted(
+        p for p in directory.rglob("*")
+        if p.is_file()
+        and p.suffix in (".yaml", ".yml")
+        and not any(part.startswith(".") for part in p.relative_to(directory).parts)
+    )
+    for yaml_file in yaml_files:
+        try:
+            text = yaml_file.read_text()
+        except OSError as e:
+            raise RuntimeError(f"Cannot read {yaml_file}: {e}") from e
+        try:
+            for doc in yaml.safe_load_all(text):
+                if isinstance(doc, dict):
+                    docs.append(doc)
+        except yaml.YAMLError as e:
+            raise RuntimeError(f"Invalid YAML in {yaml_file}: {e}") from e
+    return docs
+
+
+def _render_source(
+    source: HelmSource,
+    source_dir: Path,
+    release_name: str,
+    namespace: str,
+    tmp_dir: Path,
+    argocd_env: bool,
+    ref_map: dict[str, Path],
+) -> list[dict[str, Any]]:
+    """Render a single source: helm template for charts, plain read otherwise."""
+    if (source_dir / "Chart.yaml").exists():
+        return run_template(
+            chart_path=source_dir,
+            source=source,
+            release_name=release_name,
+            namespace=namespace,
+            tmp_dir=tmp_dir,
+            argocd_env=argocd_env,
+            ref_map=ref_map,
+        )
+    return _read_plain_manifests(source_dir)
 
 
 def walk(
@@ -43,7 +91,6 @@ def walk(
     _visited = _visited | {node.name}
 
     # Build the ref map from any sources that carry a `ref` field.
-    # These are value-only sources — they don't render a chart themselves.
     try:
         ref_map = resolve_ref_map(
             node.sources, tmp_dir=tmp_dir, working_dir=_parent_chart_dir
@@ -52,49 +99,49 @@ def walk(
         node.error = e
         return node
 
-    # Identify the chart sources (sources without a ref, or with both ref and a chart/path).
-    chart_sources = [s for s in node.sources if not s.is_ref_only]
+    # Renderable sources: everything that isn't ref-only.
+    renderable_sources = [s for s in node.sources if not s.is_ref_only]
 
-    if not chart_sources:
+    if not renderable_sources:
         node.error = RuntimeError(
-            f"Application {node.name!r}: no renderable chart source found "
+            f"Application {node.name!r}: no renderable source found "
             f"(all sources are ref-only)"
         )
         return node
 
-    # Render each chart source, combining their output onto this node.
     all_docs: list[dict[str, Any]] = []
-    primary_chart_dir: Path | None = None
+    primary_dir: Path | None = None
 
-    for source in chart_sources:
+    for source in renderable_sources:
         try:
-            chart_dir = resolve_source(
-                source, tmp_dir=tmp_dir, working_dir=_parent_chart_dir
+            source_dir = resolve_source(
+                source, tmp_dir=tmp_dir, working_dir=_parent_chart_dir,
+                require_chart=False,
             )
         except (ResolveError, HelmError) as e:
             node.error = e
             return node
 
-        if primary_chart_dir is None:
-            primary_chart_dir = chart_dir
+        if primary_dir is None:
+            primary_dir = source_dir
 
         try:
-            docs = run_template(
-                chart_path=chart_dir,
+            docs = _render_source(
                 source=source,
+                source_dir=source_dir,
                 release_name=_release_name(node, source),
                 namespace=node.namespace,
                 tmp_dir=tmp_dir,
                 argocd_env=argocd_env,
                 ref_map=ref_map,
             )
-        except HelmError as e:
+        except (HelmError, RuntimeError) as e:
             node.error = e
             return node
 
         all_docs.extend(docs)
 
-    node.chart_dir = primary_chart_dir
+    node.chart_dir = primary_dir
 
     # Split Application manifests from regular resources
     child_docs: list[dict[str, Any]] = []
@@ -125,7 +172,7 @@ def walk(
             max_depth=max_depth,
             _depth=_depth + 1,
             _visited=_visited,
-            _parent_chart_dir=primary_chart_dir,
+            _parent_chart_dir=primary_dir,
         )
         node.children.append(child_node)
 
