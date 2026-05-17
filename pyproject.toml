@@ -12,6 +12,8 @@ dependencies = [
     "rich>=13.0",
     "pyyaml>=6.0",
     "pydantic>=2.0",
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
 ]
 
 [project.optional-dependencies]
@@ -19,14 +21,14 @@ dev = [
     "pytest>=8.0",
     "pytest-mock>=3.12",
 ]
-web = [
-    "streamlit>=1.32",
-]
 
 [project.scripts]
 localargo = "localargo.cli:main"
-localargo-web = "localargo.web_runner:main"
+localargo-web = "localargo.server:run"
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["localargo*"]
+
+[tool.setuptools.package-data]
+localargo = ["static/*"]
