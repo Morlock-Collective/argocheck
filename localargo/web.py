@@ -13,6 +13,7 @@ import yaml
 from localargo.helm import HelmError, check_helm
 from localargo.models import AppNode
 from localargo.parser import ParseError, load_yaml_file, parse_application
+from localargo import recents as _recents
 from localargo.walker import walk
 
 # ── Page config ─────────────────────────────────────────────────────────────
@@ -294,6 +295,25 @@ with st.sidebar:
         key=_KEY_FILE_INPUT,
     )
 
+    # Recently used files
+    recent_paths = _recents.load()
+    if recent_paths:
+        with st.expander(f"Recent ({len(recent_paths)})"):
+            for path_str in recent_paths:
+                p = Path(path_str)
+                col_pick, col_del = st.columns([5, 1])
+                with col_pick:
+                    # Show filename + immediate parent dir for disambiguation
+                    label = f"📄 {p.name}" if p.parent == p else f"📄 {p.name}  ({p.parent.name})"
+                    if st.button(label, key=f"recent_pick_{path_str}",
+                                 use_container_width=True, help=path_str):
+                        st.session_state[_KEY_FILE_INPUT] = path_str
+                        st.rerun()
+                with col_del:
+                    if st.button("✕", key=f"recent_del_{path_str}", help="Remove from recents"):
+                        _recents.remove(path_str)
+                        st.rerun()
+
     with st.expander("Browse…"):
         _render_file_browser()
 
@@ -343,6 +363,7 @@ if run_clicked:
             st.session_state[_KEY_ERROR] = f"File not found: {path}"
             st.session_state.pop(_KEY_TREE, None)
         else:
+            _recents.add(str(path.resolve()))
             with st.spinner("Running helm template…"):
                 tree, err = _run_rendering(path, argocd_env=bool(argocd_env), max_depth=int(max_depth))
             if err:
