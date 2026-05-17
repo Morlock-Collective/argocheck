@@ -161,8 +161,17 @@ def serve_index() -> FileResponse:
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
-def run() -> None:
+import click
+
+@click.command()
+@click.option("--port", default=8765, show_default=True, help="Port to listen on.")
+@click.option("--host", default="127.0.0.1", show_default=True, help="Host to bind to.")
+@click.option("--no-browser", is_flag=True, default=False, help="Do not open a browser tab.")
+def run(port: int, host: str, no_browser: bool) -> None:
+    """Start the localargo web interface."""
     import threading
-    url = "http://127.0.0.1:8765"
-    threading.Timer(0.8, lambda: webbrowser.open(url)).start()
-    uvicorn.run(app, host="127.0.0.1", port=8765, log_level="warning")
+    url = f"http://{host}:{port}"
+    if not no_browser:
+        threading.Timer(0.8, lambda: webbrowser.open(url)).start()
+    click.echo(f"localargo listening on {url}")
+    uvicorn.run(app, host=host, port=port, log_level="warning")
