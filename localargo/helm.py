@@ -158,8 +158,18 @@ def helm_pull(chart_ref: str, version: str | None, dest: Path, untar: bool = Tru
         raise HelmError(f"helm pull failed: {e.stderr}", cmd=cmd, stderr=e.stderr)
 
 
+def _deps_satisfied(charts_dir: Path) -> bool:
+    """True when charts/ contains at least one real chart (archive or unpacked)."""
+    if not charts_dir.exists():
+        return False
+    return any(
+        e.suffix == ".tgz" or (e.is_dir() and (e / "Chart.yaml").exists())
+        for e in charts_dir.iterdir()
+    )
+
+
 def _maybe_update_dependencies(chart_path: Path) -> None:
-    """Run `helm dependency update` if the chart has deps but no charts/ dir."""
+    """Run `helm dependency update` if declared deps are not yet satisfied."""
     chart_yaml = chart_path / "Chart.yaml"
     if not chart_yaml.exists():
         return
@@ -170,8 +180,7 @@ def _maybe_update_dependencies(chart_path: Path) -> None:
     if not chart_meta.get("dependencies"):
         return
 
-    charts_dir = chart_path / "charts"
-    if charts_dir.exists() and any(charts_dir.iterdir()):
+    if _deps_satisfied(chart_path / "charts"):
         return
 
     cmd = ["helm", "dependency", "update", str(chart_path)]
