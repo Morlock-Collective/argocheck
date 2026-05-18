@@ -131,20 +131,24 @@ def _resolve_git(source: HelmSource, tmp_dir: Path, require_chart: bool) -> Path
     repo_url = source.repo_url
     revision = source.target_revision or "HEAD"
 
-    clone_dir = tmp_dir / "git" / _slug(repo_url)
-    clone_dir.mkdir(parents=True, exist_ok=True)
+    # Key on both URL and revision so different branches never share a directory,
+    # and the same URL+revision is reused within a single run without re-cloning.
+    clone_dir = tmp_dir / "git" / _slug(f"{repo_url}@{revision}")
 
-    cmd = ["git", "clone", "--depth", "1"]
-    if revision and revision != "HEAD":
-        cmd += ["--branch", revision]
-    cmd += [repo_url, str(clone_dir)]
+    if not (clone_dir / ".git" / "HEAD").exists():
+        clone_dir.mkdir(parents=True, exist_ok=True)
 
-    try:
-        subprocess.run(cmd, capture_output=True, text=True, check=True)
-    except FileNotFoundError:
-        raise ResolveError("git binary not found. Install git or use a local chart path.")
-    except subprocess.CalledProcessError as e:
-        raise ResolveError(f"git clone failed for {repo_url!r}:\n{e.stderr}")
+        cmd = ["git", "clone", "--depth", "1"]
+        if revision and revision != "HEAD":
+            cmd += ["--branch", revision]
+        cmd += [repo_url, str(clone_dir)]
+
+        try:
+            subprocess.run(cmd, capture_output=True, text=True, check=True)
+        except FileNotFoundError:
+            raise ResolveError("git binary not found. Install git or use a local chart path.")
+        except subprocess.CalledProcessError as e:
+            raise ResolveError(f"git clone failed for {repo_url!r}:\n{e.stderr}")
 
     chart_path = (clone_dir / source.path) if source.path else clone_dir
 
