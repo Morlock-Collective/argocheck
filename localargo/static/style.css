@@ -227,6 +227,12 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
 
 /* ── Resource viewer ─────────────────────────────────────────────────────── */
 .resources-header { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.5rem; }
+.view-toggle { display: flex; gap: 0.25rem; }
+.view-toggle .btn { flex: 1; justify-content: center; }
+
+.kind-group { margin-bottom: 1.25rem; }
+.kind-heading { font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; padding: 0.35rem 0; border-bottom: 2px solid var(--border); margin-bottom: 0.4rem; }
+
 .kind-tabs { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.75rem; }
 .kind-tab { padding: 0.25rem 0.65rem; border: 1px solid var(--border); border-radius: 999px; font-size: 0.8rem; background: var(--surface); cursor: pointer; }
 .kind-tab:hover { background: var(--bg); }

@@ -86,7 +86,12 @@ const YamlBlock = {
 
 const ResourceViewer = {
   components: { YamlBlock },
-  props: { manifests: { type: Array, required: true } },
+  props: {
+    manifests:   { type: Array,  required: true },
+    displayMode: { type: String, default: "tabs" },
+    expandSeq:   { type: Number, default: 0 },
+    collapseSeq: { type: Number, default: 0 },
+  },
   setup(props) {
     const activeKind = ref(null);
     const openResources = ref(new Set());
@@ -96,10 +101,14 @@ const ResourceViewer = {
     const activeManifests = computed(() =>
       props.manifests.filter(m => (m.kind ?? "?") === currentKind.value)
     );
+    const manifestsByKind = computed(() => {
+      const map = Object.fromEntries(kinds.value.map(k => [k, []]));
+      for (const m of props.manifests) (map[m.kind ?? "?"] ??= []).push(m);
+      for (const k in map) map[k].sort((a, b) => resName(a).localeCompare(resName(b)));
+      return map;
+    });
 
-    function resKey(m) {
-      return `${m.kind}/${m.metadata?.name ?? "?"}`;
-    }
+    function resKey(m) { return `${m.kind}/${m.metadata?.name ?? "?"}`; }
     function resName(m) { return m.metadata?.name ?? "?"; }
     function toggleRes(key) {
       const s = new Set(openResources.value);
@@ -108,15 +117,35 @@ const ResourceViewer = {
     }
     function isOpen(key) { return openResources.value.has(key); }
 
-    watch(() => props.manifests, () => { activeKind.value = null; openResources.value = new Set(); });
+    watch(() => props.manifests,   () => { activeKind.value = null; openResources.value = new Set(); });
+    watch(() => props.expandSeq,   () => { openResources.value = new Set(props.manifests.map(resKey)); });
+    watch(() => props.collapseSeq, () => { openResources.value = new Set(); });
 
-    return { kinds, currentKind, activeManifests, activeKind, resKey, resName, toggleRes, isOpen };
+    return { kinds, currentKind, activeManifests, manifestsByKind, activeKind, resKey, resName, toggleRes, isOpen };
   },
   template: `
     <div>
       <div v-if="manifests.length === 0" style="color:var(--text-muted);font-size:0.85rem;">
         No non-Application resources rendered by this app.
       </div>
+
+      <!-- ── List mode: kinds as headings, all resources visible ── -->
+      <template v-else-if="displayMode === 'list'">
+        <div v-for="kind in kinds" :key="kind" class="kind-group">
+          <div class="kind-heading">{{ kind }}</div>
+          <div v-for="m in manifestsByKind[kind]" :key="resKey(m)" class="resource-item">
+            <div class="resource-item-header" @click="toggleRes(resKey(m))">
+              <span>{{ resName(m) }}</span>
+              <i class="resource-chevron" :class="{open: isOpen(resKey(m))}">›</i>
+            </div>
+            <div v-if="isOpen(resKey(m))" class="resource-yaml">
+              <yaml-block :content="m"></yaml-block>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <!-- ── Tabs mode (default): one kind at a time ── -->
       <template v-else>
         <div class="kind-tabs">
           <button v-for="k in kinds" :key="k" class="kind-tab"
@@ -141,7 +170,12 @@ const ResourceViewer = {
 
 const AppDetail = {
   components: { YamlBlock, ResourceViewer },
-  props: { node: { type: Object, required: true } },
+  props: {
+    node:        { type: Object, required: true },
+    displayMode: { type: String, default: "tabs" },
+    expandSeq:   { type: Number, default: 0 },
+    collapseSeq: { type: Number, default: 0 },
+  },
   emits: ["selectApp"],
   setup(props) {
     const showYaml = ref(false);
@@ -230,7 +264,10 @@ const AppDetail = {
           <div class="resources-header">
             Resources ({{ (node.manifests || []).length }})
           </div>
-          <resource-viewer :manifests="node.manifests || []"></resource-viewer>
+          <resource-viewer :manifests="node.manifests || []"
+                           :display-mode="displayMode"
+                           :expand-seq="expandSeq"
+                           :collapse-seq="collapseSeq"></resource-viewer>
         </template>
 
       </template>
@@ -306,7 +343,15 @@ createApp({
     const options     = ref({ argocdEnv: false, maxDepth: 10 });
 
     // Sidebar section open/closed
-    const sections = ref({ recents: true, browser: false, options: false });
+    const sections = ref({ recents: true, browser: false, options: false, display: false });
+
+    // ── Display controls
+    const displayMode = ref(localStorage.getItem("displayMode") || "tabs");
+    const expandSeq   = ref(0);
+    const collapseSeq = ref(0);
+    watch(displayMode, v => localStorage.setItem("displayMode", v));
+    function expandAll()   { expandSeq.value++;   }
+    function collapseAll() { collapseSeq.value++; }
 
     // ── Sidebar resize
     const MIN_W = 180, MAX_W = 600;
@@ -407,6 +452,7 @@ createApp({
       loadRecents, removeRecent, selectPath, onBrowserSelect, doRender,
       basename, dirname,
       sidebarWidth, onHandleMouseDown,
+      displayMode, expandSeq, collapseSeq, expandAll, collapseAll,
     };
   },
 
@@ -481,6 +527,29 @@ createApp({
           {{ isRendering ? "Rendering…" : "Render" }}
         </button>
 
+        <!-- Display controls (shown after a render) -->
+        <div class="sidebar-section" v-if="renderResult">
+          <button class="section-header" @click="sections.display = !sections.display">
+            Display
+            <i class="section-chevron" :class="{open: sections.display}">›</i>
+          </button>
+          <div v-if="sections.display" class="section-body">
+            <div class="option-row">
+              <label>Mode</label>
+              <div class="view-toggle">
+                <button class="btn btn-sm" :class="{'btn-primary': displayMode === 'tabs'}"
+                        @click="displayMode = 'tabs'">Tabs</button>
+                <button class="btn btn-sm" :class="{'btn-primary': displayMode === 'list'}"
+                        @click="displayMode = 'list'">List</button>
+              </div>
+            </div>
+            <div class="option-row">
+              <button class="btn btn-sm" style="flex:1;justify-content:center" @click="expandAll()">Expand all</button>
+              <button class="btn btn-sm" style="flex:1;justify-content:center" @click="collapseAll()">Collapse all</button>
+            </div>
+          </div>
+        </div>
+
         <!-- App tree -->
         <div v-if="flat.length" class="tree-section">
           <div class="tree-label">Applications</div>
@@ -534,6 +603,9 @@ createApp({
           </div>
           <div class="divider"></div>
           <app-detail v-if="selectedNode" :node="selectedNode" :key="selectedNode.name"
+                      :display-mode="displayMode"
+                      :expand-seq="expandSeq"
+                      :collapse-seq="collapseSeq"
                       @select-app="selectedApp = $event"></app-detail>
         </template>
 
