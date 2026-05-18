@@ -308,6 +308,29 @@ createApp({
     // Sidebar section open/closed
     const sections = ref({ recents: true, browser: false, options: false });
 
+    // ── Sidebar resize
+    const MIN_W = 180, MAX_W = 600;
+    const sidebarWidth = ref(parseInt(localStorage.getItem("sidebarWidth")) || 300);
+
+    function onHandleMouseDown(e) {
+      e.preventDefault();
+      document.body.style.userSelect = "none";
+      document.body.style.cursor = "col-resize";
+
+      function onMove(e) {
+        sidebarWidth.value = Math.max(MIN_W, Math.min(MAX_W, e.clientX));
+      }
+      function onUp() {
+        document.body.style.userSelect = "";
+        document.body.style.cursor = "";
+        localStorage.setItem("sidebarWidth", sidebarWidth.value);
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+      }
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+    }
+
     // ── Derived
     const flat = computed(() =>
       renderResult.value?.tree ? flattenTree(renderResult.value.tree) : []
@@ -383,6 +406,7 @@ createApp({
       totalApps, totalResources, totalErrors,
       loadRecents, removeRecent, selectPath, onBrowserSelect, doRender,
       basename, dirname,
+      sidebarWidth, onHandleMouseDown,
     };
   },
 
@@ -390,7 +414,7 @@ createApp({
     <div class="layout">
 
       <!-- ── Sidebar ── -->
-      <aside class="sidebar">
+      <aside class="sidebar" :style="{ width: sidebarWidth + 'px' }">
         <div class="sidebar-header">
           <span class="logo-icon">⎈</span>
           <span class="logo">localargo</span>
@@ -470,6 +494,8 @@ createApp({
           </button>
         </div>
       </aside>
+
+      <div class="resize-handle" @mousedown="onHandleMouseDown"></div>
 
       <!-- ── Main content ── -->
       <main class="main">
