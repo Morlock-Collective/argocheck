@@ -15,6 +15,7 @@
   --text: #0f172a;
   --text-muted: #64748b;
   --code-bg: #0d1117;
+  --inset: rgba(0,0,0,0.06);
   --radius: 6px;
   --font: system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "JetBrains Mono", "Fira Code", "Cascadia Code", ui-monospace, monospace;
@@ -202,11 +203,11 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
 .status-badge.err { background: var(--error-dim); color: var(--error); }
 
 /* ── Error panel ─────────────────────────────────────────────────────────── */
-.error-panel { background: var(--error-dim); border: 1px solid #fca5a5; border-radius: var(--radius); padding: 1rem; margin-bottom: 1rem; }
+.error-panel { background: var(--error-dim); border: 1px solid var(--error); border-radius: var(--radius); padding: 1rem; margin-bottom: 1rem; }
 .error-msg { color: var(--error); font-weight: 500; margin-bottom: 0.6rem; }
 .error-block-label { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.3rem; }
-.cmd-block { font-family: var(--mono); font-size: 0.8rem; background: rgba(0,0,0,0.06); padding: 0.4rem 0.6rem; border-radius: var(--radius); margin-bottom: 0.75rem; white-space: pre-wrap; word-break: break-all; }
-.stderr-block { font-family: var(--mono); font-size: 0.8rem; background: rgba(0,0,0,0.06); padding: 0.5rem 0.75rem; border-radius: var(--radius); border-left: 3px solid var(--error); white-space: pre-wrap; word-break: break-word; overflow-x: hidden; }
+.cmd-block { font-family: var(--mono); font-size: 0.8rem; background: var(--inset); padding: 0.4rem 0.6rem; border-radius: var(--radius); margin-bottom: 0.75rem; white-space: pre-wrap; word-break: break-all; }
+.stderr-block { font-family: var(--mono); font-size: 0.8rem; background: var(--inset); padding: 0.5rem 0.75rem; border-radius: var(--radius); border-left: 3px solid var(--error); white-space: pre-wrap; word-break: break-word; overflow-x: hidden; }
 
 /* ── Collapsible source ──────────────────────────────────────────────────── */
 .collapsible { margin-bottom: 0.75rem; }
@@ -267,3 +268,28 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
   transition: background 0.15s;
 }
 .copy-btn:hover { background: rgba(255,255,255,0.22); }
+
+/* ── Dark mode ───────────────────────────────────────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:           #0f172a;
+    --surface:      #1e293b;
+    --border:       #334155;
+    --border-light: #1e293b;
+    --primary:      #3b82f6;
+    --primary-dim:  #172554;
+    --success:      #22c55e;
+    --success-dim:  #14532d;
+    --error:        #f87171;
+    --error-dim:    #450a0a;
+    --text:         #f1f5f9;
+    --text-muted:   #94a3b8;
+    --inset:        rgba(255,255,255,0.06);
+  }
+
+  /* Number inputs inherit surface colour in dark mode */
+  .option-row input[type=number] { color: var(--text); }
+
+  /* Scrollbars */
+  * { scrollbar-color: var(--border) var(--surface); }
+}
