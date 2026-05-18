@@ -110,6 +110,32 @@ def test_ref_value_file_unknown_ref_raises():
 import pytest
 
 
+def test_read_helm_repos_parses_helm_env(monkeypatch):
+    """_read_helm_repos extracts HELM_CONFIG_HOME from `helm env` output."""
+    import subprocess
+    from localargo.helm import _read_helm_repos
+    import yaml, tempfile, os
+
+    with tempfile.TemporaryDirectory() as config_dir:
+        # Write a minimal repositories.yaml in the fake config dir
+        repos_yaml = {
+            "apiVersion": "",
+            "repositories": [{"name": "myrepo", "url": "https://charts.example.com"}],
+        }
+        (Path(config_dir) / "repositories.yaml").write_text(yaml.dump(repos_yaml))
+
+        # Fake `helm env` output — quotes around the value, matching real helm output
+        fake_env = f'HELM_CACHE_HOME="{config_dir}/cache"\nHELM_CONFIG_HOME="{config_dir}"\nHELM_DATA_HOME="{config_dir}/data"\n'
+
+        monkeypatch.setattr(
+            subprocess, "run",
+            lambda cmd, **kw: type("R", (), {"stdout": fake_env, "returncode": 0})(),
+        )
+
+        repos = _read_helm_repos()
+        assert repos == {"myrepo": "https://charts.example.com"}
+
+
 def test_ensure_dep_repos_raises_for_missing_alias(tmp_path, monkeypatch):
     """Alias-based dependency with no matching registered repo raises HelmError."""
     from localargo.helm import HelmError, _ensure_dep_repos

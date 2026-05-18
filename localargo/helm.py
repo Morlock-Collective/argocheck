@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import hashlib
-import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -161,11 +160,28 @@ def helm_pull(chart_ref: str, version: str | None, dest: Path, untar: bool = Tru
 
 
 def _read_helm_repos() -> dict[str, str]:
-    """Return {alias: url} for all repos registered in the local helm config."""
-    config_home = Path(
-        os.environ.get("HELM_CONFIG_HOME")
-        or os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "helm")
-    )
+    """Return {alias: url} for all repos registered in the local helm config.
+
+    Uses `helm env` to discover the config path so this works correctly on all
+    platforms (Linux, macOS, Windows) without replicating Helm's own path logic.
+    """
+    try:
+        result = subprocess.run(
+            ["helm", "env"], capture_output=True, text=True, check=True
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return {}
+
+    config_home: Path | None = None
+    for line in result.stdout.splitlines():
+        if line.startswith("HELM_CONFIG_HOME="):
+            raw = line.split("=", 1)[1].strip().strip('"').strip("'")
+            config_home = Path(raw)
+            break
+
+    if config_home is None:
+        return {}
+
     repos_file = config_home / "repositories.yaml"
     try:
         data = yaml.safe_load(repos_file.read_text()) or {}
