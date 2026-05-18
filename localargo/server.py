@@ -10,7 +10,8 @@ from typing import Any
 
 import uvicorn
 from fastapi import FastAPI, Query
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from localargo import recents as _recents
@@ -144,19 +145,11 @@ def api_browse(path: str = Query(default="~")) -> dict[str, Any]:
 
 # ── Static file routes ────────────────────────────────────────────────────────
 
-@app.get("/app.js")
-def serve_js() -> FileResponse:
-    return FileResponse(_STATIC / "app.js", media_type="application/javascript")
-
-
-@app.get("/style.css")
-def serve_css() -> FileResponse:
-    return FileResponse(_STATIC / "style.css", media_type="text/css")
-
-
 @app.get("/")
 def serve_index() -> FileResponse:
     return FileResponse(_STATIC / "index.html")
+
+app.mount("/static", StaticFiles(directory=_STATIC), name="static")
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
