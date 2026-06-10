@@ -63,10 +63,13 @@ def build_template_cmd(
                     cmd=[],
                 )
             resolved = (ref_map[ref_name] / rel_path).resolve()
-            cmd += ["-f", str(resolved)]
         else:
             resolved = (chart_path / vf).resolve()
-            cmd += ["-f", str(resolved)]
+
+        if source.ignore_missing_value_files and not resolved.exists():
+            continue
+
+        cmd += ["-f", str(resolved)]
 
     # Inline values string → temp file
     if source.values:

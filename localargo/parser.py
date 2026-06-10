@@ -78,6 +78,7 @@ def _parse_helm_source(app_name: str, raw: dict[str, Any]) -> HelmSource:
     values_object = helm_raw.get("valuesObject") or None
 
     value_files: list[str] = helm_raw.get("valueFiles") or []
+    ignore_missing_value_files = bool(helm_raw.get("ignoreMissingValueFiles", False))
 
     raw_params: list[dict[str, Any]] = helm_raw.get("parameters") or []
     parameters = [
@@ -102,6 +103,7 @@ def _parse_helm_source(app_name: str, raw: dict[str, Any]) -> HelmSource:
         values=values,
         values_object=values_object,
         value_files=value_files,
+        ignore_missing_value_files=ignore_missing_value_files,
         parameters=parameters,
         version=version,
     )

@@ -23,6 +23,7 @@ class HelmSource:
     values: str | None = None         # inline values YAML string
     values_object: dict[str, Any] | None = None
     value_files: list[str] = field(default_factory=list)
+    ignore_missing_value_files: bool = False
     parameters: list[HelmParameter] = field(default_factory=list)
     version: str | None = None        # helm API version hint
 
