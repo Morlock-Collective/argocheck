@@ -43,6 +43,19 @@ function findNode(flat, name) {
   return flat.find(({ node }) => node.name === name)?.node ?? null;
 }
 
+// Read/write navigation state via query parameters (hash is left free for
+// the browser's built-in anchor navigation).
+function updateQueryParams(updates) {
+  const params = new URLSearchParams(window.location.search);
+  for (const [key, value] of Object.entries(updates)) {
+    if (value === null || value === undefined || value === "") params.delete(key);
+    else params.set(key, value);
+  }
+  const qs = params.toString();
+  const url = window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash;
+  history.replaceState(null, "", url);
+}
+
 function highlightYaml(obj) {
   const str = jsyaml.dump(obj, { indent: 2, noRefs: true, lineWidth: -1 });
   return hljs.highlight(str, { language: "yaml" }).value;
@@ -91,10 +104,18 @@ const ResourceViewer = {
     displayMode: { type: String, default: "tabs" },
     expandSeq:   { type: Number, default: 0 },
     collapseSeq: { type: Number, default: 0 },
+    initialActiveKind: { type: String, default: null },
+    initialOpenKeys:   { type: Array,  default: () => [] },
   },
-  setup(props) {
-    const activeKind = ref(null);
-    const openResources = ref(new Set());
+  emits: ["state-change"],
+  setup(props, { emit }) {
+    const kindsInit = new Set(props.manifests.map(m => m.kind ?? "?"));
+    const keysInit  = new Set(props.manifests.map(m => `${m.kind}/${m.metadata?.name ?? "?"}`));
+
+    const activeKind = ref(
+      props.initialActiveKind && kindsInit.has(props.initialActiveKind) ? props.initialActiveKind : null
+    );
+    const openResources = ref(new Set(props.initialOpenKeys.filter(k => keysInit.has(k))));
 
     const kinds = computed(() => [...new Set(props.manifests.map(m => m.kind ?? "?"))].sort());
     const currentKind = computed(() => activeKind.value ?? kinds.value[0] ?? null);
@@ -120,6 +141,10 @@ const ResourceViewer = {
     watch(() => props.manifests,   () => { activeKind.value = null; openResources.value = new Set(); });
     watch(() => props.expandSeq,   () => { openResources.value = new Set(props.manifests.map(resKey)); });
     watch(() => props.collapseSeq, () => { openResources.value = new Set(); });
+
+    watch([activeKind, openResources], () => {
+      emit("state-change", { kind: currentKind.value, open: [...openResources.value] });
+    });
 
     return { kinds, currentKind, activeManifests, manifestsByKind, activeKind, resKey, resName, toggleRes, isOpen };
   },
@@ -175,8 +200,10 @@ const AppDetail = {
     displayMode: { type: String, default: "tabs" },
     expandSeq:   { type: Number, default: 0 },
     collapseSeq: { type: Number, default: 0 },
+    initialActiveKind: { type: String, default: null },
+    initialOpenKeys:   { type: Array,  default: () => [] },
   },
-  emits: ["selectApp"],
+  emits: ["selectApp", "stateChange"],
   setup(props) {
     const showYaml = ref(false);
     const sourceOpen = ref(false);
@@ -267,7 +294,10 @@ const AppDetail = {
           <resource-viewer :manifests="node.manifests || []"
                            :display-mode="displayMode"
                            :expand-seq="expandSeq"
-                           :collapse-seq="collapseSeq"></resource-viewer>
+                           :collapse-seq="collapseSeq"
+                           :initial-active-kind="initialActiveKind"
+                           :initial-open-keys="initialOpenKeys"
+                           @state-change="$emit('stateChange', $event)"></resource-viewer>
         </template>
 
       </template>
@@ -341,6 +371,12 @@ createApp({
     const topError    = ref(null);
     const selectedApp = ref(null);
     const options     = ref({ argocdEnv: false, maxDepth: 10 });
+
+    // ── Navigation state (recorded in the URL query string)
+    const viewState     = ref({ kind: null, open: [] }); // resource-viewer state for selectedApp
+    const staleApp      = ref(null);                     // app name from URL/prior view that no longer exists
+    const staleSelection = ref(null);                    // { app, kind, open } to retry on the next render
+    const pendingSelection = ref(null);                  // selection to apply once the next render completes
 
     // Sidebar section open/closed
     const sections = ref({ recents: true, browser: false, options: false, display: false });
@@ -416,12 +452,77 @@ createApp({
       sections.value.browser = false;
     }
 
+    // Apply a remembered/requested selection to a freshly rendered tree.
+    // Falls back to the root app and records `target` as stale if it's gone,
+    // keeping it around so a subsequent re-render can retry it.
+    function applySelection(flatList, rootName, target, kind, open) {
+      staleApp.value = null;
+      staleSelection.value = null;
+      if (target && target !== rootName) {
+        if (findNode(flatList, target)) {
+          selectedApp.value = target;
+          viewState.value = { kind: kind || null, open: open || [] };
+          return;
+        }
+        staleApp.value = target;
+        staleSelection.value = { app: target, kind: kind || null, open: open || [] };
+        selectedApp.value = rootName;
+        viewState.value = { kind: null, open: [] };
+        return;
+      }
+      selectedApp.value = rootName;
+      viewState.value = { kind: kind || null, open: open || [] };
+    }
+
+    // Persist the current navigation state (root path, selected app, and
+    // resource-viewer state) to the URL's query parameters. While an app
+    // is stale, its reference is kept in the URL so a re-render can retry it.
+    function syncUrl() {
+      const rootName = flat.value[0]?.node.name ?? null;
+      let appParam = null, kind = null, open = null;
+      if (staleSelection.value) {
+        ({ app: appParam, kind, open } = staleSelection.value);
+      } else if (renderResult.value && selectedApp.value && selectedApp.value !== rootName) {
+        appParam = selectedApp.value;
+        ({ kind, open } = viewState.value);
+      }
+      updateQueryParams({
+        path: rootPath.value.trim() || null,
+        app: appParam,
+        kind: kind || null,
+        open: (open && open.length) ? open.join(",") : null,
+      });
+    }
+
+    function selectApp(name) {
+      if (selectedApp.value === name) return;
+      selectedApp.value = name;
+      viewState.value = { kind: null, open: [] };
+      staleApp.value = null;
+      staleSelection.value = null;
+      syncUrl();
+    }
+
+    function onResourceStateChange(state) {
+      viewState.value = state;
+      syncUrl();
+    }
+
+    function clearNavigation() {
+      staleApp.value = null;
+      staleSelection.value = null;
+      syncUrl();
+    }
+
     async function doRender() {
       if (!rootPath.value.trim() || isRendering.value) return;
       isRendering.value = true;
       topError.value = null;
+      const previousApp  = selectedApp.value;
+      const previousView = viewState.value;
       renderResult.value = null;
       selectedApp.value = null;
+      staleApp.value = null;
       try {
         const result = await api("POST", "/api/render", {
           path: rootPath.value.trim(),
@@ -432,17 +533,42 @@ createApp({
           topError.value = result.error;
         } else {
           renderResult.value = result;
-          selectedApp.value = result.tree?.name ?? null;
+          const flatList = flattenTree(result.tree);
+          const rootName = result.tree?.name ?? null;
+          if (pendingSelection.value) {
+            const sel = pendingSelection.value;
+            pendingSelection.value = null;
+            applySelection(flatList, rootName, sel.app, sel.kind, sel.open);
+          } else if (staleSelection.value) {
+            const sel = staleSelection.value;
+            applySelection(flatList, rootName, sel.app, sel.kind, sel.open);
+          } else {
+            applySelection(flatList, rootName, previousApp, previousView.kind, previousView.open);
+          }
           await loadRecents();
         }
       } catch (e) {
         topError.value = String(e);
       } finally {
         isRendering.value = false;
+        syncUrl();
       }
     }
 
-    onMounted(loadRecents);
+    onMounted(() => {
+      loadRecents();
+      const params = new URLSearchParams(window.location.search);
+      const path = params.get("path");
+      if (path) {
+        rootPath.value = path;
+        pendingSelection.value = {
+          app: params.get("app") || null,
+          kind: params.get("kind") || null,
+          open: (params.get("open") || "").split(",").filter(Boolean),
+        };
+        doRender();
+      }
+    });
 
     return {
       rootPath, recents, isRendering, renderResult, topError,
@@ -453,6 +579,7 @@ createApp({
       basename, dirname,
       sidebarWidth, onHandleMouseDown,
       displayMode, expandSeq, collapseSeq, expandAll, collapseAll,
+      viewState, staleApp, selectApp, onResourceStateChange, clearNavigation,
     };
   },
 
@@ -556,7 +683,7 @@ createApp({
           <button v-for="({depth, node}, i) in flat" :key="node.name"
                   class="tree-item"
                   :class="{active: node.name === (selectedNode && selectedNode.name)}"
-                  @click="selectedApp = node.name">
+                  @click="selectApp(node.name)">
             <span class="tree-prefix">{{ prefixes[i] }}</span>
             <span>{{ node.error ? "❌" : "✅" }}</span>
             <span class="tree-name">{{ node.name }}</span>
@@ -601,12 +728,19 @@ createApp({
               <div class="metric-label">Errors</div>
             </div>
           </div>
+          <div v-if="staleApp" class="stale-warning">
+            <span>⚠ Application "{{ staleApp }}" is no longer present in the rendered tree.</span>
+            <button class="btn btn-sm" @click="clearNavigation">Clear navigation</button>
+          </div>
           <div class="divider"></div>
           <app-detail v-if="selectedNode" :node="selectedNode" :key="selectedNode.name"
                       :display-mode="displayMode"
                       :expand-seq="expandSeq"
                       :collapse-seq="collapseSeq"
-                      @select-app="selectedApp = $event"></app-detail>
+                      :initial-active-kind="viewState.kind"
+                      :initial-open-keys="viewState.open"
+                      @select-app="selectApp"
+                      @state-change="onResourceStateChange"></app-detail>
         </template>
 
       </main>

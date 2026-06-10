@@ -12,6 +12,8 @@
   --success-dim: #dcfce7;
   --error: #dc2626;
   --error-dim: #fee2e2;
+  --warning: #d97706;
+  --warning-dim: #fef3c7;
   --text: #0f172a;
   --text-muted: #64748b;
   --code-bg: #0d1117;
@@ -184,6 +186,12 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
 .top-error { background: var(--error-dim); border: 1px solid var(--error); border-radius: var(--radius); padding: 1rem 1.25rem; color: var(--error); margin-bottom: 1rem; }
 .top-error h3 { margin-bottom: 0.35rem; }
 
+.stale-warning {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  background: var(--warning-dim); border: 1px solid var(--warning); border-radius: var(--radius);
+  padding: 0.6rem 1rem; color: var(--warning); margin-bottom: 1rem; font-size: 0.85rem;
+}
+
 /* ── Metrics ─────────────────────────────────────────────────────────────── */
 .metrics { display: flex; gap: 1rem; margin-bottom: 1.25rem; }
 .metric { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.75rem 1.25rem; min-width: 7rem; }
@@ -282,6 +290,8 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
     --success-dim:  #14532d;
     --error:        #f87171;
     --error-dim:    #450a0a;
+    --warning:      #fbbf24;
+    --warning-dim:  #451a03;
     --text:         #f1f5f9;
     --text-muted:   #94a3b8;
     --inset:        rgba(255,255,255,0.06);
