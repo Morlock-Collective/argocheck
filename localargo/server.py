@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import uvicorn
+import yaml
 from fastapi import FastAPI, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -73,6 +74,20 @@ class RenderRequest(BaseModel):
     path: str
     argocd_env: bool = False
     max_depth: int = 10
+    values_override: str | None = None
+
+
+def _chart_root_node(chart_dir: Path, values_override: str | None) -> AppNode:
+    """Build a pseudo-root AppNode for a bare Helm chart directory."""
+    name = chart_dir.name
+    try:
+        chart_meta = yaml.safe_load((chart_dir / "Chart.yaml").read_text()) or {}
+        name = chart_meta.get("name") or name
+    except (OSError, yaml.YAMLError):
+        pass
+
+    source = HelmSource(repo_url=str(chart_dir), values=values_override or None)
+    return AppNode(name=name, namespace="default", sources=[source])
 
 
 def _do_render(req: RenderRequest) -> dict[str, Any]:
@@ -81,14 +96,22 @@ def _do_render(req: RenderRequest) -> dict[str, Any]:
     except HelmError as e:
         return {"ok": False, "tree": None, "error": str(e)}
 
-    path = Path(req.path)
-    try:
-        doc = load_yaml_file(path)
-        root_node = parse_application(doc)
-    except ParseError as e:
-        return {"ok": False, "tree": None, "error": str(e)}
+    path = Path(req.path).expanduser()
 
-    root_dir = path.resolve().parent
+    if path.is_dir():
+        chart_dir = path.resolve()
+        if not (chart_dir / "Chart.yaml").exists():
+            return {"ok": False, "tree": None, "error": f"{chart_dir} has no Chart.yaml"}
+        root_node = _chart_root_node(chart_dir, req.values_override)
+        root_dir = chart_dir.parent
+    else:
+        try:
+            doc = load_yaml_file(path)
+            root_node = parse_application(doc)
+        except ParseError as e:
+            return {"ok": False, "tree": None, "error": str(e)}
+        root_dir = path.resolve().parent
+
     with tempfile.TemporaryDirectory(prefix="localargo-") as tmp:
         root_node = walk(
             root_node,
@@ -131,7 +154,7 @@ def api_browse(path: str = Query(default="~")) -> dict[str, Any]:
     except PermissionError:
         return {"error": "Permission denied", "current": str(p),
                 "parent": str(p.parent) if p.parent != p else None,
-                "dirs": [], "files": []}
+                "dirs": [], "files": [], "hasChart": False}
     dirs = [str(e) for e in entries if e.is_dir() and not e.name.startswith(".")]
     files = [str(e) for e in entries if e.is_file() and e.suffix in (".yaml", ".yml")]
     return {
@@ -139,6 +162,7 @@ def api_browse(path: str = Query(default="~")) -> dict[str, Any]:
         "parent": str(p.parent) if p.parent != p else None,
         "dirs": dirs,
         "files": files,
+        "hasChart": (p / "Chart.yaml").exists(),
         "error": None,
     }
 

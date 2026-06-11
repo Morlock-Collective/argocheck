@@ -344,6 +344,11 @@ const FileBrowser = {
       <button v-if="contents.parent" class="btn btn-ghost browser-item"
               @click="browseTo(contents.parent)">↑ ..</button>
       <div v-if="contents.error" style="color:var(--error);font-size:0.8rem;">{{ contents.error }}</div>
+      <button v-if="contents.hasChart" class="btn btn-ghost browser-item"
+              :class="{ 'is-selected': contents.current === seedPath }"
+              @click="selectFile(contents.current)" :title="contents.current">
+        ⎈ Use this chart directory
+      </button>
       <template v-for="d in contents.dirs" :key="d">
         <button class="btn btn-ghost browser-item" @click="browseTo(d)" :title="d">
           📁 {{ d.split('/').pop() }}
@@ -378,7 +383,7 @@ createApp({
     const renderResult = ref(null);   // { ok, tree, error }
     const topError    = ref(null);
     const selectedApp = ref(null);
-    const options     = ref({ argocdEnv: false, maxDepth: 10 });
+    const options     = ref({ argocdEnv: false, maxDepth: 10, valuesOverride: "" });
 
     // ── Navigation state (recorded in the URL query string)
     const viewState     = ref({ kind: null, open: [] }); // resource-viewer state for selectedApp
@@ -540,6 +545,7 @@ createApp({
           path: rootPath.value.trim(),
           argocd_env: options.value.argocdEnv,
           max_depth: options.value.maxDepth,
+          values_override: options.value.valuesOverride.trim() || null,
         });
         if (!result.ok) {
           topError.value = result.error;
@@ -607,9 +613,9 @@ createApp({
 
         <!-- Path input -->
         <div class="path-section">
-          <label class="path-label">Root Application manifest</label>
+          <label class="path-label">Root Application manifest or chart directory</label>
           <input class="path-input" v-model="rootPath"
-                 placeholder="/path/to/root-app.yaml"
+                 placeholder="/path/to/root-app.yaml or chart dir"
                  @keyup.enter="doRender">
         </div>
 
@@ -655,6 +661,11 @@ createApp({
             <div class="option-row">
               <label for="opt-depth">Max recursion depth</label>
               <input id="opt-depth" type="number" v-model.number="options.maxDepth" min="1" max="50">
+            </div>
+            <div class="option-row option-col">
+              <label for="opt-values">Values override (chart-directory roots)</label>
+              <textarea id="opt-values" class="values-textarea" v-model="options.valuesOverride"
+                        rows="5" placeholder="key: value"></textarea>
             </div>
           </div>
         </div>
@@ -721,7 +732,7 @@ createApp({
         <div v-else-if="!renderResult" class="welcome">
           <div style="font-size:2.5rem">⎈</div>
           <h2>Getting started</h2>
-          <p>Select a root <code>kind:Application</code> manifest using Browse… or by typing the path, then click <strong>Render</strong>.</p>
+          <p>Select a root <code>kind:Application</code> manifest, or a directory containing a Helm chart, using Browse… or by typing the path, then click <strong>Render</strong>.</p>
           <p style="color:var(--text-muted)">Requires <code>helm</code> on your PATH.</p>
         </div>
 
