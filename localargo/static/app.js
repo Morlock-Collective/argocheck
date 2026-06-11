@@ -6,9 +6,13 @@ const { createApp, ref, computed, watch, onMounted } = Vue;
 function basename(p) { return p.split("/").pop() || p; }
 function dirname(p)  { const parts = p.split("/"); parts.pop(); return parts.join("/") || "/"; }
 
-function flattenTree(node, depth = 0) {
-  const out = [{ depth, node }];
-  for (const c of (node.children || [])) out.push(...flattenTree(c, depth + 1));
+// Each entry carries a `path` (names from root to this node) and a `pathKey`
+// (path joined by "/"), which uniquely identify a node even when multiple
+// leaves share the same name in different branches of the tree.
+function flattenTree(node, depth = 0, parentPath = []) {
+  const path = [...parentPath, node.name];
+  const out = [{ depth, node, path, pathKey: path.join("/") }];
+  for (const c of (node.children || [])) out.push(...flattenTree(c, depth + 1, path));
   return out;
 }
 
@@ -39,8 +43,8 @@ function computeTreePrefixes(flat) {
   });
 }
 
-function findNode(flat, name) {
-  return flat.find(({ node }) => node.name === name)?.node ?? null;
+function findNode(flat, pathKey) {
+  return flat.find((e) => e.pathKey === pathKey)?.node ?? null;
 }
 
 // Read/write navigation state via query parameters (hash is left free for
@@ -197,6 +201,7 @@ const AppDetail = {
   components: { YamlBlock, ResourceViewer },
   props: {
     node:        { type: Object, required: true },
+    nodePath:    { type: Array,  required: true },
     displayMode: { type: String, default: "tabs" },
     expandSeq:   { type: Number, default: 0 },
     collapseSeq: { type: Number, default: 0 },
@@ -220,7 +225,10 @@ const AppDetail = {
       if (src.releaseName) rows.push(["releaseName", src.releaseName]);
       return rows;
     }
-    return { showYaml, sourceOpen, sourceLabel, sourceRows };
+    function childPathKey(child) {
+      return [...props.nodePath, child.name].join("/");
+    }
+    return { showYaml, sourceOpen, sourceLabel, sourceRows, childPathKey };
   },
   template: `
     <div>
@@ -284,7 +292,7 @@ const AppDetail = {
           <div v-if="node.children && node.children.length" class="children-info">
             Child applications:
             <button v-for="c in node.children" :key="c.name"
-                    class="child-tag" @click="$emit('selectApp', c.name)">{{ c.name }}</button>
+                    class="child-tag" @click="$emit('selectApp', childPathKey(c))">{{ c.name }}</button>
           </div>
 
           <!-- Resources -->
@@ -418,14 +426,18 @@ createApp({
     );
     const prefixes = computed(() => computeTreePrefixes(flat.value));
 
-    const selectedNode = computed(() => {
+    // selectedApp holds a pathKey (names from root to node joined by "/"),
+    // which uniquely identifies a node even if its name is shared with
+    // leaves in other branches of the tree.
+    const selectedEntry = computed(() => {
       if (!flat.value.length) return null;
       if (selectedApp.value) {
-        const found = findNode(flat.value, selectedApp.value);
+        const found = flat.value.find((e) => e.pathKey === selectedApp.value);
         if (found) return found;
       }
-      return flat.value[0]?.node ?? null;
+      return flat.value[0] ?? null;
     });
+    const selectedNode = computed(() => selectedEntry.value?.node ?? null);
 
     const totalApps      = computed(() => flat.value.length);
     const totalResources = computed(() => flat.value.reduce((s, { node }) => s + (node.manifests?.length ?? 0), 0));
@@ -573,7 +585,7 @@ createApp({
     return {
       rootPath, recents, isRendering, renderResult, topError,
       selectedApp, options, sections,
-      flat, prefixes, selectedNode,
+      flat, prefixes, selectedNode, selectedEntry,
       totalApps, totalResources, totalErrors,
       loadRecents, removeRecent, selectPath, onBrowserSelect, doRender,
       basename, dirname,
@@ -680,10 +692,10 @@ createApp({
         <!-- App tree -->
         <div v-if="flat.length" class="tree-section">
           <div class="tree-label">Applications</div>
-          <button v-for="({depth, node}, i) in flat" :key="node.name"
+          <button v-for="({depth, node, pathKey}, i) in flat" :key="pathKey"
                   class="tree-item"
-                  :class="{active: node.name === (selectedNode && selectedNode.name)}"
-                  @click="selectApp(node.name)">
+                  :class="{active: pathKey === (selectedEntry && selectedEntry.pathKey)}"
+                  @click="selectApp(pathKey)">
             <span class="tree-prefix">{{ prefixes[i] }}</span>
             <span>{{ node.error ? "❌" : "✅" }}</span>
             <span class="tree-name">{{ node.name }}</span>
@@ -729,11 +741,11 @@ createApp({
             </div>
           </div>
           <div v-if="staleApp" class="stale-warning">
-            <span>⚠ Application "{{ staleApp }}" is no longer present in the rendered tree.</span>
+            <span>⚠ Application "{{ staleApp.split('/').join(' › ') }}" is no longer present in the rendered tree.</span>
             <button class="btn btn-sm" @click="clearNavigation">Clear navigation</button>
           </div>
           <div class="divider"></div>
-          <app-detail v-if="selectedNode" :node="selectedNode" :key="selectedNode.name"
+          <app-detail v-if="selectedNode" :node="selectedNode" :node-path="selectedEntry.path" :key="selectedEntry.pathKey"
                       :display-mode="displayMode"
                       :expand-seq="expandSeq"
                       :collapse-seq="collapseSeq"
