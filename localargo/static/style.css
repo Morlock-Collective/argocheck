@@ -270,6 +270,51 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
 .resource-chevron.open { transform: rotate(90deg); }
 .resource-yaml { overflow-x: auto; }
 
+/* ── Diff mode ───────────────────────────────────────────────────────────── */
+.diff-select {
+  width: 100%;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.8rem;
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+}
+.diff-select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-dim); }
+
+.diff-header { display: flex; gap: 1.5rem; margin-bottom: 1rem; font-size: 0.9rem; }
+.diff-branch { display: flex; align-items: center; gap: 0.4rem; font-family: var(--mono); }
+.diff-branch-label {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.4rem; height: 1.4rem; border-radius: 4px; font-weight: 700; font-size: 0.8rem;
+  background: var(--primary-dim); color: var(--primary);
+}
+.diff-branch-b { background: var(--success-dim); color: var(--success); }
+
+.diff-app { margin-bottom: 1.25rem; }
+.diff-app-header { display: flex; align-items: center; gap: 0.6rem; font-weight: 600; font-size: 0.9rem; padding: 0.4rem 0; border-bottom: 2px solid var(--border); margin-bottom: 0.5rem; }
+.diff-app-path { font-family: var(--mono); }
+
+.diff-badge { display: inline-flex; padding: 0.1rem 0.55rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; flex-shrink: 0; }
+.diff-badge.changed { background: var(--warning-dim); color: var(--warning); }
+.diff-badge.added, .diff-badge.onlyB { background: var(--success-dim); color: var(--success); }
+.diff-badge.removed, .diff-badge.onlyA { background: var(--error-dim); color: var(--error); }
+.diff-badge.identical { background: var(--border-light); color: var(--text-muted); }
+
+.diff-resource { margin-bottom: 0.5rem; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.diff-resource-header { padding: 0.45rem 0.75rem; font-family: var(--mono); font-size: 0.82rem; font-weight: 600; background: var(--bg); cursor: pointer; display: flex; align-items: center; gap: 0.6rem; }
+.diff-resource-header:hover { background: var(--border-light); }
+.diff-resource-name { flex: 1; }
+
+.diff-lines { font-family: var(--mono); font-size: 0.8rem; overflow-x: auto; }
+.diff-line { padding: 0 0.5rem; white-space: pre; }
+.diff-line.diff-add { background: var(--success-dim); color: var(--success); }
+.diff-line.diff-del { background: var(--error-dim); color: var(--error); }
+.diff-marker { display: inline-block; width: 1.4em; user-select: none; opacity: 0.6; }
+.diff-collapsed { padding: 0.35rem 0.75rem; color: var(--text-muted); font-size: 0.78rem; font-style: italic; background: var(--inset); border-radius: var(--radius); margin-bottom: 0.5rem; }
+
 /* ── YAML / code blocks ──────────────────────────────────────────────────── */
 .hljs { border-radius: 0; font-family: var(--mono); font-size: 0.82em; padding: 1rem; line-height: 1.5; }
 .yaml-standalone { border-radius: var(--radius); overflow: hidden; margin-bottom: 1rem; }

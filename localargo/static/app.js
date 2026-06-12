@@ -47,6 +47,140 @@ function findNode(flat, pathKey) {
   return flat.find((e) => e.pathKey === pathKey)?.node ?? null;
 }
 
+// ── Diff utilities ───────────────────────────────────────────────────────
+
+function dumpYaml(obj) {
+  return jsyaml.dump(obj, { indent: 2, noRefs: true, lineWidth: -1 });
+}
+
+function resourceDiffKey(m) {
+  return `${m.kind ?? "?"}/${m.metadata?.name ?? "?"}`;
+}
+
+// LCS-based line diff: returns a list of {type: "eq"|"add"|"del", text}.
+function diffLines(a, b) {
+  const aLines = a.split("\n");
+  const bLines = b.split("\n");
+  const n = aLines.length, m = bLines.length;
+  const dp = Array.from({ length: n + 1 }, () => new Int32Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] = aLines[i] === bLines[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  const ops = [];
+  let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (aLines[i] === bLines[j]) { ops.push({ type: "eq", text: aLines[i] }); i++; j++; }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) { ops.push({ type: "del", text: aLines[i] }); i++; }
+    else { ops.push({ type: "add", text: bLines[j] }); j++; }
+  }
+  while (i < n) { ops.push({ type: "del", text: aLines[i] }); i++; }
+  while (j < m) { ops.push({ type: "add", text: bLines[j] }); j++; }
+  return ops;
+}
+
+// Collapse runs of unchanged lines down to `context` lines around each
+// change, returning a list of {type: "lines", ops} / {type: "collapsed", count}.
+function collapseContext(ops, context = 3) {
+  const n = ops.length;
+  const ranges = [];
+  for (let i = 0; i < n; i++) {
+    if (ops[i].type === "eq") continue;
+    const start = Math.max(0, i - context);
+    const end = Math.min(n, i + context + 1);
+    if (ranges.length && start <= ranges[ranges.length - 1][1]) {
+      ranges[ranges.length - 1][1] = Math.max(ranges[ranges.length - 1][1], end);
+    } else {
+      ranges.push([start, end]);
+    }
+  }
+  const segments = [];
+  let prevEnd = 0;
+  for (const [start, end] of ranges) {
+    if (start > prevEnd) segments.push({ type: "collapsed", count: start - prevEnd });
+    segments.push({ type: "lines", ops: ops.slice(start, end) });
+    prevEnd = end;
+  }
+  if (prevEnd < n) segments.push({ type: "collapsed", count: n - prevEnd });
+  return segments;
+}
+
+// All entries belonging to the subtree rooted at `rootEntry`, keyed by their
+// path relative to that root (so siblings at corresponding positions in two
+// different subtrees share the same relative key).
+function subtreeEntries(flat, rootEntry) {
+  const prefixLen = rootEntry.path.length;
+  const map = new Map();
+  for (const e of flat) {
+    if (e.pathKey === rootEntry.pathKey || e.pathKey.startsWith(rootEntry.pathKey + "/")) {
+      map.set(e.path.slice(prefixLen).join("/"), e);
+    }
+  }
+  return map;
+}
+
+// Diff the manifest lists of two matched apps, matching resources by kind+name.
+function diffResources(manifestsA, manifestsB) {
+  const mapA = new Map((manifestsA || []).map((m) => [resourceDiffKey(m), m]));
+  const mapB = new Map((manifestsB || []).map((m) => [resourceDiffKey(m), m]));
+  const keys = new Set([...mapA.keys(), ...mapB.keys()]);
+  const out = [];
+  for (const key of keys) {
+    const a = mapA.get(key), b = mapB.get(key);
+    let status, yamlA = null, yamlB = null;
+    if (a && b) {
+      yamlA = dumpYaml(a);
+      yamlB = dumpYaml(b);
+      status = yamlA === yamlB ? "identical" : "changed";
+    } else if (a) {
+      yamlA = dumpYaml(a);
+      status = "removed";
+    } else {
+      yamlB = dumpYaml(b);
+      status = "added";
+    }
+    const ref = a || b;
+    out.push({ key, kind: ref.kind ?? "?", name: ref.metadata?.name ?? "?", status, yamlA, yamlB });
+  }
+  out.sort((x, y) => x.key.localeCompare(y.key));
+  return out;
+}
+
+// Diff two subtrees: match apps by relative path under each root, then diff
+// each matched pair's resources.
+function diffTrees(flat, entryA, entryB) {
+  const mapA = subtreeEntries(flat, entryA);
+  const mapB = subtreeEntries(flat, entryB);
+  const relPaths = new Set([...mapA.keys(), ...mapB.keys()]);
+  const apps = [];
+  for (const relPath of relPaths) {
+    const eA = mapA.get(relPath), eB = mapB.get(relPath);
+    if (eA && eB) {
+      const resources = diffResources(eA.node.manifests, eB.node.manifests);
+      const changed = resources.some((r) => r.status !== "identical");
+      apps.push({ relPath, status: changed ? "changed" : "identical", resources });
+    } else if (eA) {
+      apps.push({ relPath, status: "onlyA", resources: [] });
+    } else {
+      apps.push({ relPath, status: "onlyB", resources: [] });
+    }
+  }
+  apps.sort((a, b) => a.relPath.localeCompare(b.relPath));
+  return { apps };
+}
+
+function diffStatusLabel(status) {
+  return {
+    changed: "Changed", added: "Added", removed: "Removed",
+    identical: "Identical", onlyA: "Only in A", onlyB: "Only in B",
+  }[status] || status;
+}
+
+function diffMarker(type) {
+  return { add: "+", del: "-", eq: " " }[type] || " ";
+}
+
 // Read/write navigation state via query parameters (hash is left free for
 // the browser's built-in anchor navigation).
 function updateQueryParams(updates) {
@@ -313,6 +447,125 @@ const AppDetail = {
   `
 };
 
+// ── Diff components ───────────────────────────────────────────────────────
+
+const DiffResource = {
+  props: {
+    resource:    { type: Object,  required: true },
+    fullContext: { type: Boolean, default: false },
+  },
+  setup(props) {
+    const open = ref(false);
+
+    const segments = computed(() => {
+      if (!open.value) return [];
+      if (props.resource.status === "changed") {
+        const ops = diffLines(props.resource.yamlA, props.resource.yamlB);
+        return props.fullContext ? [{ type: "lines", ops }] : collapseContext(ops, 3);
+      }
+      if (props.resource.status === "added") {
+        return [{ type: "lines", ops: props.resource.yamlB.split("\n").map((text) => ({ type: "add", text })) }];
+      }
+      if (props.resource.status === "removed") {
+        return [{ type: "lines", ops: props.resource.yamlA.split("\n").map((text) => ({ type: "del", text })) }];
+      }
+      // identical
+      const ops = (props.resource.yamlA ?? props.resource.yamlB).split("\n").map((text) => ({ type: "eq", text }));
+      return props.fullContext ? [{ type: "lines", ops }] : collapseContext(ops, 3);
+    });
+
+    return { open, segments, diffStatusLabel, diffMarker };
+  },
+  template: `
+    <div class="diff-resource">
+      <div class="diff-resource-header" @click="open = !open">
+        <span class="diff-badge" :class="resource.status">{{ diffStatusLabel(resource.status) }}</span>
+        <span class="diff-resource-name">{{ resource.kind }}/{{ resource.name }}</span>
+        <i class="resource-chevron" :class="{open}">›</i>
+      </div>
+      <div v-if="open" class="diff-lines">
+        <template v-for="(seg, i) in segments" :key="i">
+          <div v-if="seg.type === 'collapsed'" class="diff-collapsed">
+            ⋯ {{ seg.count }} unchanged line{{ seg.count === 1 ? '' : 's' }} ⋯
+          </div>
+          <div v-else>
+            <div v-for="(op, j) in seg.ops" :key="j" class="diff-line" :class="'diff-' + op.type">
+              <span class="diff-marker">{{ diffMarker(op.type) }}</span><span class="diff-text">{{ op.text }}</span>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+  `
+};
+
+const DiffApp = {
+  components: { DiffResource },
+  props: {
+    app:           { type: Object,  required: true },
+    showIdentical: { type: Boolean, default: false },
+    fullContext:   { type: Boolean, default: false },
+  },
+  setup(props) {
+    const visibleResources = computed(() =>
+      props.showIdentical ? props.app.resources : props.app.resources.filter((r) => r.status !== "identical")
+    );
+    const identicalCount = computed(() => props.app.resources.filter((r) => r.status === "identical").length);
+    return { visibleResources, identicalCount, diffStatusLabel };
+  },
+  template: `
+    <div class="diff-app">
+      <div class="diff-app-header">
+        <span class="diff-badge" :class="app.status">{{ diffStatusLabel(app.status) }}</span>
+        <span class="diff-app-path">{{ app.relPath || '(root)' }}</span>
+      </div>
+      <template v-if="app.status === 'changed' || app.status === 'identical'">
+        <diff-resource v-for="r in visibleResources" :key="r.key" :resource="r" :full-context="fullContext"></diff-resource>
+        <div v-if="!showIdentical && identicalCount" class="diff-collapsed">
+          {{ identicalCount }} identical resource{{ identicalCount === 1 ? '' : 's' }} hidden
+        </div>
+      </template>
+      <div v-else class="diff-collapsed">
+        {{ app.status === 'onlyA' ? 'Only present under Branch A' : 'Only present under Branch B' }}
+      </div>
+    </div>
+  `
+};
+
+const DiffViewer = {
+  components: { DiffApp },
+  props: {
+    result:        { type: Object,  required: true },
+    labelA:        { type: String,  required: true },
+    labelB:        { type: String,  required: true },
+    showIdentical: { type: Boolean, default: false },
+    fullContext:   { type: Boolean, default: false },
+  },
+  setup(props) {
+    const visibleApps = computed(() =>
+      props.showIdentical ? props.result.apps : props.result.apps.filter((a) => a.status !== "identical")
+    );
+    const identicalAppCount = computed(() => props.result.apps.filter((a) => a.status === "identical").length);
+    return { visibleApps, identicalAppCount };
+  },
+  template: `
+    <div class="diff-viewer">
+      <div class="diff-header">
+        <div class="diff-branch"><span class="diff-branch-label diff-branch-a">A</span> {{ labelA }}</div>
+        <div class="diff-branch"><span class="diff-branch-label diff-branch-b">B</span> {{ labelB }}</div>
+      </div>
+      <diff-app v-for="a in visibleApps" :key="a.relPath" :app="a"
+                :show-identical="showIdentical" :full-context="fullContext"></diff-app>
+      <div v-if="!showIdentical && identicalAppCount" class="diff-collapsed">
+        {{ identicalAppCount }} identical application{{ identicalAppCount === 1 ? '' : 's' }} hidden
+      </div>
+      <div v-if="!visibleApps.length && !identicalAppCount" class="diff-collapsed">
+        No applications found under either branch.
+      </div>
+    </div>
+  `
+};
+
 // ── FileBrowser component ─────────────────────────────────────────────────
 
 const FileBrowser = {
@@ -373,7 +626,7 @@ const FileBrowser = {
 // ── Root App ──────────────────────────────────────────────────────────────
 
 createApp({
-  components: { FileBrowser, AppDetail },
+  components: { FileBrowser, AppDetail, DiffViewer },
 
   setup() {
     // ── State
@@ -391,8 +644,16 @@ createApp({
     const staleSelection = ref(null);                    // { app, kind, open } to retry on the next render
     const pendingSelection = ref(null);                  // selection to apply once the next render completes
 
+    // ── Diff mode
+    const diffMode          = ref(false);
+    const diffA             = ref(null);  // pathKey of "Branch A"
+    const diffB             = ref(null);  // pathKey of "Branch B"
+    const diffShowIdentical = ref(false);
+    const diffFullContext   = ref(false);
+    const pendingDiff       = ref(null);  // { a, b } pathKeys to apply once the next render completes
+
     // Sidebar section open/closed
-    const sections = ref({ recents: true, browser: false, options: false, display: false });
+    const sections = ref({ recents: true, browser: false, options: false, display: false, diff: false });
 
     // ── Display controls
     const displayMode = ref(localStorage.getItem("displayMode") || "tabs");
@@ -443,6 +704,18 @@ createApp({
       return flat.value[0] ?? null;
     });
     const selectedNode = computed(() => selectedEntry.value?.node ?? null);
+
+    // ── Diff mode derived state
+    const diffOptions = computed(() =>
+      flat.value.map((e) => ({ pathKey: e.pathKey, label: e.path.join(" › ") }))
+    );
+    const diffResult = computed(() => {
+      if (!diffMode.value || !diffA.value || !diffB.value) return null;
+      const entryA = flat.value.find((e) => e.pathKey === diffA.value);
+      const entryB = flat.value.find((e) => e.pathKey === diffB.value);
+      if (!entryA || !entryB) return null;
+      return diffTrees(flat.value, entryA, entryB);
+    });
 
     const totalApps      = computed(() => flat.value.length);
     const totalResources = computed(() => flat.value.reduce((s, { node }) => s + (node.manifests?.length ?? 0), 0));
@@ -508,8 +781,13 @@ createApp({
         app: appParam,
         kind: kind || null,
         open: (open && open.length) ? open.join(",") : null,
+        diff: diffMode.value ? "1" : null,
+        diffA: diffMode.value ? diffA.value : null,
+        diffB: diffMode.value ? diffB.value : null,
       });
     }
+
+    watch([diffMode, diffA, diffB], syncUrl);
 
     function selectApp(name) {
       if (selectedApp.value === name) return;
@@ -563,6 +841,12 @@ createApp({
           } else {
             applySelection(flatList, rootName, previousApp, previousView.kind, previousView.open);
           }
+          if (pendingDiff.value) {
+            const { a, b } = pendingDiff.value;
+            pendingDiff.value = null;
+            if (a && findNode(flatList, a)) diffA.value = a;
+            if (b && findNode(flatList, b)) diffB.value = b;
+          }
           await loadRecents();
         }
       } catch (e) {
@@ -584,6 +868,10 @@ createApp({
           kind: params.get("kind") || null,
           open: (params.get("open") || "").split(",").filter(Boolean),
         };
+        if (params.get("diff") === "1") {
+          diffMode.value = true;
+          pendingDiff.value = { a: params.get("diffA") || null, b: params.get("diffB") || null };
+        }
         doRender();
       }
     });
@@ -598,6 +886,7 @@ createApp({
       sidebarWidth, onHandleMouseDown,
       displayMode, expandSeq, collapseSeq, expandAll, collapseAll,
       viewState, staleApp, selectApp, onResourceStateChange, clearNavigation,
+      diffMode, diffA, diffB, diffShowIdentical, diffFullContext, diffOptions, diffResult,
     };
   },
 
@@ -700,6 +989,49 @@ createApp({
           </div>
         </div>
 
+        <!-- Diff mode (shown after a render) -->
+        <div class="sidebar-section" v-if="renderResult">
+          <button class="section-header" @click="sections.diff = !sections.diff">
+            Diff
+            <i class="section-chevron" :class="{open: sections.diff}">›</i>
+          </button>
+          <div v-if="sections.diff" class="section-body">
+            <div class="option-row">
+              <input type="checkbox" v-model="diffMode" id="opt-diff-mode">
+              <label for="opt-diff-mode">Compare two branches</label>
+            </div>
+            <template v-if="diffMode">
+              <div class="option-row option-col">
+                <label for="opt-diff-a">Branch A</label>
+                <select id="opt-diff-a" class="diff-select" v-model="diffA">
+                  <option :value="null" disabled>Select an application…</option>
+                  <option v-for="o in diffOptions" :key="o.pathKey" :value="o.pathKey">{{ o.label }}</option>
+                </select>
+              </div>
+              <div class="option-row option-col">
+                <label for="opt-diff-b">Branch B</label>
+                <select id="opt-diff-b" class="diff-select" v-model="diffB">
+                  <option :value="null" disabled>Select an application…</option>
+                  <option v-for="o in diffOptions" :key="o.pathKey" :value="o.pathKey">{{ o.label }}</option>
+                </select>
+              </div>
+              <div class="option-row">
+                <input type="checkbox" v-model="diffShowIdentical" id="opt-diff-identical">
+                <label for="opt-diff-identical">Show identical apps/resources</label>
+              </div>
+              <div class="option-row">
+                <label>Diff style</label>
+                <div class="view-toggle">
+                  <button class="btn btn-sm" :class="{'btn-primary': !diffFullContext}"
+                          @click="diffFullContext = false">Minimal</button>
+                  <button class="btn btn-sm" :class="{'btn-primary': diffFullContext}"
+                          @click="diffFullContext = true">Full context</button>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+
         <!-- App tree -->
         <div v-if="flat.length" class="tree-section">
           <div class="tree-label">Applications</div>
@@ -751,19 +1083,32 @@ createApp({
               <div class="metric-label">Errors</div>
             </div>
           </div>
-          <div v-if="staleApp" class="stale-warning">
-            <span>⚠ Application "{{ staleApp.split('/').join(' › ') }}" is no longer present in the rendered tree.</span>
-            <button class="btn btn-sm" @click="clearNavigation">Clear navigation</button>
-          </div>
-          <div class="divider"></div>
-          <app-detail v-if="selectedNode" :node="selectedNode" :node-path="selectedEntry.path" :key="selectedEntry.pathKey"
-                      :display-mode="displayMode"
-                      :expand-seq="expandSeq"
-                      :collapse-seq="collapseSeq"
-                      :initial-active-kind="viewState.kind"
-                      :initial-open-keys="viewState.open"
-                      @select-app="selectApp"
-                      @state-change="onResourceStateChange"></app-detail>
+          <template v-if="diffMode">
+            <div class="divider"></div>
+            <div v-if="!diffA || !diffB" class="diff-collapsed">
+              Select two applications in the Diff section of the sidebar to compare.
+            </div>
+            <diff-viewer v-else-if="diffResult" :result="diffResult"
+                         :label-a="diffA.split('/').join(' › ')"
+                         :label-b="diffB.split('/').join(' › ')"
+                         :show-identical="diffShowIdentical"
+                         :full-context="diffFullContext"></diff-viewer>
+          </template>
+          <template v-else>
+            <div v-if="staleApp" class="stale-warning">
+              <span>⚠ Application "{{ staleApp.split('/').join(' › ') }}" is no longer present in the rendered tree.</span>
+              <button class="btn btn-sm" @click="clearNavigation">Clear navigation</button>
+            </div>
+            <div class="divider"></div>
+            <app-detail v-if="selectedNode" :node="selectedNode" :node-path="selectedEntry.path" :key="selectedEntry.pathKey"
+                        :display-mode="displayMode"
+                        :expand-seq="expandSeq"
+                        :collapse-seq="collapseSeq"
+                        :initial-active-kind="viewState.kind"
+                        :initial-open-keys="viewState.open"
+                        @select-app="selectApp"
+                        @state-change="onResourceStateChange"></app-detail>
+          </template>
         </template>
 
       </main>
