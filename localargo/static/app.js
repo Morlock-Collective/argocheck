@@ -453,9 +453,14 @@ const DiffResource = {
   props: {
     resource:    { type: Object,  required: true },
     fullContext: { type: Boolean, default: false },
+    expandSeq:   { type: Number,  default: 0 },
+    collapseSeq: { type: Number,  default: 0 },
   },
   setup(props) {
     const open = ref(false);
+
+    watch(() => props.expandSeq,   () => { open.value = true; });
+    watch(() => props.collapseSeq, () => { open.value = false; });
 
     const segments = computed(() => {
       if (!open.value) return [];
@@ -505,6 +510,8 @@ const DiffApp = {
     app:           { type: Object,  required: true },
     showIdentical: { type: Boolean, default: false },
     fullContext:   { type: Boolean, default: false },
+    expandSeq:     { type: Number,  default: 0 },
+    collapseSeq:   { type: Number,  default: 0 },
   },
   setup(props) {
     const visibleResources = computed(() =>
@@ -520,7 +527,8 @@ const DiffApp = {
         <span class="diff-app-path">{{ app.relPath || '(root)' }}</span>
       </div>
       <template v-if="app.status === 'changed' || app.status === 'identical'">
-        <diff-resource v-for="r in visibleResources" :key="r.key" :resource="r" :full-context="fullContext"></diff-resource>
+        <diff-resource v-for="r in visibleResources" :key="r.key" :resource="r" :full-context="fullContext"
+                        :expand-seq="expandSeq" :collapse-seq="collapseSeq"></diff-resource>
         <div v-if="!showIdentical && identicalCount" class="diff-collapsed">
           {{ identicalCount }} identical resource{{ identicalCount === 1 ? '' : 's' }} hidden
         </div>
@@ -540,6 +548,8 @@ const DiffViewer = {
     labelB:        { type: String,  required: true },
     showIdentical: { type: Boolean, default: false },
     fullContext:   { type: Boolean, default: false },
+    expandSeq:     { type: Number,  default: 0 },
+    collapseSeq:   { type: Number,  default: 0 },
   },
   setup(props) {
     const visibleApps = computed(() =>
@@ -555,7 +565,8 @@ const DiffViewer = {
         <div class="diff-branch"><span class="diff-branch-label diff-branch-b">B</span> {{ labelB }}</div>
       </div>
       <diff-app v-for="a in visibleApps" :key="a.relPath" :app="a"
-                :show-identical="showIdentical" :full-context="fullContext"></diff-app>
+                :show-identical="showIdentical" :full-context="fullContext"
+                :expand-seq="expandSeq" :collapse-seq="collapseSeq"></diff-app>
       <div v-if="!showIdentical && identicalAppCount" class="diff-collapsed">
         {{ identicalAppCount }} identical application{{ identicalAppCount === 1 ? '' : 's' }} hidden
       </div>
@@ -1092,7 +1103,9 @@ createApp({
                          :label-a="diffA.split('/').join(' › ')"
                          :label-b="diffB.split('/').join(' › ')"
                          :show-identical="diffShowIdentical"
-                         :full-context="diffFullContext"></diff-viewer>
+                         :full-context="diffFullContext"
+                         :expand-seq="expandSeq"
+                         :collapse-seq="collapseSeq"></diff-viewer>
           </template>
           <template v-else>
             <div v-if="staleApp" class="stale-warning">
