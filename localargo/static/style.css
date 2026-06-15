@@ -170,6 +170,29 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
 .tree-prefix { font-family: var(--mono); white-space: pre; color: var(--text-muted); flex-shrink: 0; }
 .tree-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+.tree-row { display: flex; align-items: center; }
+.tree-row .tree-item { flex: 1; min-width: 0; }
+
+/* ── Context menu ────────────────────────────────────────────────────────── */
+.context-menu { position: relative; flex-shrink: 0; }
+.context-menu-btn {
+  background: none; border: none; color: var(--text-muted);
+  padding: 0.3rem 0.6rem; font-size: 1rem; line-height: 1;
+  cursor: pointer; border-radius: var(--radius);
+}
+.context-menu-btn:hover { background: var(--bg); color: var(--text); }
+.context-menu-list {
+  position: absolute; top: 100%; right: 0.5rem; z-index: 20;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15); min-width: 13rem; overflow: hidden;
+}
+.context-menu-item {
+  display: block; width: 100%; padding: 0.5rem 0.75rem; text-align: left;
+  background: none; border: none; font-size: 0.82rem; font-family: var(--font);
+  color: var(--text); cursor: pointer;
+}
+.context-menu-item:hover { background: var(--bg); }
+
 /* ── Options ─────────────────────────────────────────────────────────────── */
 .option-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
 .option-row label { font-size: 0.85rem; flex: 1; }

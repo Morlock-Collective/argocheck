@@ -1,5 +1,5 @@
 "use strict";
-const { createApp, ref, computed, watch, onMounted } = Vue;
+const { createApp, ref, computed, watch, onMounted, onUnmounted } = Vue;
 
 // ── Utilities ─────────────────────────────────────────────────────────────
 
@@ -577,6 +577,46 @@ const DiffViewer = {
   `
 };
 
+// ── ContextMenu component ─────────────────────────────────────────────────
+//
+// Generic "⋮" action menu. The owner supplies `actions` (a list of
+// {label, handler(context)}) and a `context` value describing the item the
+// menu is attached to; the menu itself has no knowledge of what the actions
+// do — it just invokes `action.handler(context)` on click.
+
+const ContextMenu = {
+  props: {
+    actions: { type: Array, required: true },
+    context: { required: false, default: null },
+  },
+  setup(props) {
+    const open = ref(false);
+    const root = ref(null);
+
+    function toggle() { open.value = !open.value; }
+    function run(action) {
+      open.value = false;
+      action.handler(props.context);
+    }
+    function onDocClick(e) {
+      if (open.value && root.value && !root.value.contains(e.target)) open.value = false;
+    }
+
+    onMounted(() => document.addEventListener("click", onDocClick));
+    onUnmounted(() => document.removeEventListener("click", onDocClick));
+
+    return { open, root, toggle, run };
+  },
+  template: `
+    <div class="context-menu" ref="root">
+      <button class="context-menu-btn" @click.stop="toggle" title="More actions">⋮</button>
+      <div v-if="open" class="context-menu-list">
+        <button v-for="(a, i) in actions" :key="i" class="context-menu-item" @click.stop="run(a)">{{ a.label }}</button>
+      </div>
+    </div>
+  `
+};
+
 // ── FileBrowser component ─────────────────────────────────────────────────
 
 const FileBrowser = {
@@ -637,7 +677,7 @@ const FileBrowser = {
 // ── Root App ──────────────────────────────────────────────────────────────
 
 createApp({
-  components: { FileBrowser, AppDetail, DiffViewer },
+  components: { FileBrowser, AppDetail, DiffViewer, ContextMenu },
 
   setup() {
     // ── State
@@ -804,6 +844,19 @@ createApp({
       [diffA.value, diffB.value] = [diffB.value, diffA.value];
     }
 
+    function assignDiffBranch(branch, pathKey) {
+      diffMode.value = true;
+      if (branch === "A") diffA.value = pathKey;
+      else diffB.value = pathKey;
+    }
+
+    // Actions shown in each tree item's "⋮" context menu. Each entry's
+    // {pathKey, node} is passed back to the handler as `context`.
+    const treeItemActions = [
+      { label: "Assign to diff branch A", handler: (ctx) => assignDiffBranch("A", ctx.pathKey) },
+      { label: "Assign to diff branch B", handler: (ctx) => assignDiffBranch("B", ctx.pathKey) },
+    ];
+
     function selectApp(name) {
       if (selectedApp.value === name) return;
       selectedApp.value = name;
@@ -902,6 +955,7 @@ createApp({
       displayMode, expandSeq, collapseSeq, expandAll, collapseAll,
       viewState, staleApp, selectApp, onResourceStateChange, clearNavigation,
       diffMode, diffA, diffB, diffShowIdentical, diffFullContext, diffOptions, diffResult, swapDiffBranches,
+      treeItemActions,
     };
   },
 
@@ -1054,14 +1108,16 @@ createApp({
         <!-- App tree -->
         <div v-if="flat.length" class="tree-section">
           <div class="tree-label">Applications</div>
-          <button v-for="({depth, node, pathKey}, i) in flat" :key="pathKey"
-                  class="tree-item"
-                  :class="{active: pathKey === (selectedEntry && selectedEntry.pathKey)}"
-                  @click="selectApp(pathKey)">
-            <span class="tree-prefix">{{ prefixes[i] }}</span>
-            <span>{{ node.error ? "❌" : "✅" }}</span>
-            <span class="tree-name">{{ node.name }}</span>
-          </button>
+          <div v-for="({depth, node, pathKey}, i) in flat" :key="pathKey" class="tree-row">
+            <button class="tree-item"
+                    :class="{active: pathKey === (selectedEntry && selectedEntry.pathKey)}"
+                    @click="selectApp(pathKey)">
+              <span class="tree-prefix">{{ prefixes[i] }}</span>
+              <span>{{ node.error ? "❌" : "✅" }}</span>
+              <span class="tree-name">{{ node.name }}</span>
+            </button>
+            <context-menu :actions="treeItemActions" :context="{ pathKey, node }"></context-menu>
+          </div>
         </div>
       </aside>
 
