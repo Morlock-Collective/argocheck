@@ -800,6 +800,10 @@ createApp({
 
     watch([diffMode, diffA, diffB], syncUrl);
 
+    function swapDiffBranches() {
+      [diffA.value, diffB.value] = [diffB.value, diffA.value];
+    }
+
     function selectApp(name) {
       if (selectedApp.value === name) return;
       selectedApp.value = name;
@@ -897,7 +901,7 @@ createApp({
       sidebarWidth, onHandleMouseDown,
       displayMode, expandSeq, collapseSeq, expandAll, collapseAll,
       viewState, staleApp, selectApp, onResourceStateChange, clearNavigation,
-      diffMode, diffA, diffB, diffShowIdentical, diffFullContext, diffOptions, diffResult,
+      diffMode, diffA, diffB, diffShowIdentical, diffFullContext, diffOptions, diffResult, swapDiffBranches,
     };
   },
 
@@ -1025,6 +1029,10 @@ createApp({
                   <option :value="null" disabled>Select an application…</option>
                   <option v-for="o in diffOptions" :key="o.pathKey" :value="o.pathKey">{{ o.label }}</option>
                 </select>
+              </div>
+              <div class="option-row">
+                <button class="btn btn-sm" style="flex:1;justify-content:center" @click="swapDiffBranches()"
+                        :disabled="!diffA && !diffB">⇄ Swap A / B</button>
               </div>
               <div class="option-row">
                 <input type="checkbox" v-model="diffShowIdentical" id="opt-diff-identical">
