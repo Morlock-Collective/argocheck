@@ -611,7 +611,7 @@ const ContextMenu = {
   },
   template: `
     <div class="context-menu" ref="root">
-      <button class="context-menu-btn" @click.stop="toggle" title="More actions">⋮</button>
+      <button class="context-menu-btn" @click="toggle" title="More actions">⋮</button>
       <div v-if="open" class="context-menu-list">
         <button v-for="(a, i) in actions" :key="i" class="context-menu-item"
                 @mouseenter="emit('preview', a.branch ?? null)"
