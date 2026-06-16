@@ -14,6 +14,8 @@
   --error-dim: #fee2e2;
   --warning: #d97706;
   --warning-dim: #fef3c7;
+  --diff-a: #2563eb;
+  --diff-b: #9333ea;
   --text: #0f172a;
   --text-muted: #64748b;
   --code-bg: #0d1117;
@@ -172,6 +174,16 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
 
 .tree-row { display: flex; align-items: center; }
 .tree-row .tree-item { flex: 1; min-width: 0; }
+
+/* Branch A/B markers in tree */
+.branch-badge {
+  width: 1.3rem; height: 1.3rem; border-radius: 50%; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 0.65rem; font-weight: 700; color: #fff; user-select: none;
+  margin-right: 0.1rem;
+}
+.branch-badge-a { background: var(--diff-a); }
+.branch-badge-b { background: var(--diff-b); }
 
 /* ── Context menu ────────────────────────────────────────────────────────── */
 .context-menu { position: relative; flex-shrink: 0; }
@@ -376,6 +388,8 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
     --error-dim:    #450a0a;
     --warning:      #fbbf24;
     --warning-dim:  #451a03;
+    --diff-a: #3b82f6;
+    --diff-b: #a855f7;
     --text:         #f1f5f9;
     --text-muted:   #94a3b8;
     --inset:        rgba(255,255,255,0.06);

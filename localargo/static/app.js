@@ -1116,6 +1116,8 @@ createApp({
               <span>{{ node.error ? "❌" : "✅" }}</span>
               <span class="tree-name">{{ node.name }}</span>
             </button>
+            <span v-if="pathKey === diffA" class="branch-badge branch-badge-a" title="Diff branch A">A</span>
+            <span v-if="pathKey === diffB" class="branch-badge branch-badge-b" title="Diff branch B">B</span>
             <context-menu :actions="treeItemActions" :context="{ pathKey, node }"></context-menu>
           </div>
         </div>
