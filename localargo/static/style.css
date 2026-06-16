@@ -184,6 +184,8 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
 }
 .branch-badge-a { background: var(--diff-a); }
 .branch-badge-b { background: var(--diff-b); }
+.branch-badge-a.highlighted { outline: 2px solid var(--diff-a); outline-offset: 2px; }
+.branch-badge-b.highlighted { outline: 2px solid var(--diff-b); outline-offset: 2px; }
 
 /* ── Context menu ────────────────────────────────────────────────────────── */
 .context-menu { position: relative; flex-shrink: 0; }

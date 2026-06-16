@@ -589,13 +589,15 @@ const ContextMenu = {
     actions: { type: Array, required: true },
     context: { required: false, default: null },
   },
-  setup(props) {
+  emits: ["preview"],
+  setup(props, { emit }) {
     const open = ref(false);
     const root = ref(null);
 
     function toggle() { open.value = !open.value; }
     function run(action) {
       open.value = false;
+      emit("preview", null);
       action.handler(props.context);
     }
     function onDocClick(e) {
@@ -605,13 +607,16 @@ const ContextMenu = {
     onMounted(() => document.addEventListener("click", onDocClick));
     onUnmounted(() => document.removeEventListener("click", onDocClick));
 
-    return { open, root, toggle, run };
+    return { open, root, toggle, run, emit };
   },
   template: `
     <div class="context-menu" ref="root">
       <button class="context-menu-btn" @click.stop="toggle" title="More actions">⋮</button>
       <div v-if="open" class="context-menu-list">
-        <button v-for="(a, i) in actions" :key="i" class="context-menu-item" @click.stop="run(a)">{{ a.label }}</button>
+        <button v-for="(a, i) in actions" :key="i" class="context-menu-item"
+                @mouseenter="emit('preview', a.branch ?? null)"
+                @mouseleave="emit('preview', null)"
+                @click.stop="run(a)">{{ a.label }}</button>
       </div>
     </div>
   `
@@ -852,10 +857,14 @@ createApp({
 
     // Actions shown in each tree item's "⋮" context menu. Each entry's
     // {pathKey, node} is passed back to the handler as `context`.
+    // `branch` is forwarded as a "preview" event so the tree can highlight
+    // the corresponding badge while the user hovers an item.
     const treeItemActions = [
-      { label: "Assign to diff branch A", handler: (ctx) => assignDiffBranch("A", ctx.pathKey) },
-      { label: "Assign to diff branch B", handler: (ctx) => assignDiffBranch("B", ctx.pathKey) },
+      { label: "Assign to diff branch A", branch: "A", handler: (ctx) => assignDiffBranch("A", ctx.pathKey) },
+      { label: "Assign to diff branch B", branch: "B", handler: (ctx) => assignDiffBranch("B", ctx.pathKey) },
     ];
+
+    const previewBranch = ref(null);
 
     function selectApp(name) {
       if (selectedApp.value === name) return;
@@ -955,7 +964,7 @@ createApp({
       displayMode, expandSeq, collapseSeq, expandAll, collapseAll,
       viewState, staleApp, selectApp, onResourceStateChange, clearNavigation,
       diffMode, diffA, diffB, diffShowIdentical, diffFullContext, diffOptions, diffResult, swapDiffBranches,
-      treeItemActions,
+      treeItemActions, previewBranch,
     };
   },
 
@@ -1116,9 +1125,12 @@ createApp({
               <span>{{ node.error ? "❌" : "✅" }}</span>
               <span class="tree-name">{{ node.name }}</span>
             </button>
-            <span v-if="pathKey === diffA" class="branch-badge branch-badge-a" title="Diff branch A">A</span>
-            <span v-if="pathKey === diffB" class="branch-badge branch-badge-b" title="Diff branch B">B</span>
-            <context-menu :actions="treeItemActions" :context="{ pathKey, node }"></context-menu>
+            <span v-if="pathKey === diffA" class="branch-badge branch-badge-a"
+                  :class="{ highlighted: previewBranch === 'A' }" title="Diff branch A">A</span>
+            <span v-if="pathKey === diffB" class="branch-badge branch-badge-b"
+                  :class="{ highlighted: previewBranch === 'B' }" title="Diff branch B">B</span>
+            <context-menu :actions="treeItemActions" :context="{ pathKey, node }"
+                          @preview="previewBranch = $event"></context-menu>
           </div>
         </div>
       </aside>
