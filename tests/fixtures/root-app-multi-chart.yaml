@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: multi-chart-app
+  namespace: argocd
+spec:
+  destination:
+    namespace: default
+    server: https://kubernetes.default.svc
+  sources:
+    - repoURL: ./simple-chart
+      targetRevision: HEAD
+      helm:
+        releaseName: chart-a
+        parameters:
+          - name: replicaCount
+            value: "2"
+    - repoURL: ./child-chart
+      targetRevision: HEAD
+      helm:
+        releaseName: chart-b
+        parameters:
+          - name: replicaCount
+            value: "5"
+  project: default

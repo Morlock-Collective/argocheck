@@ -1,0 +1,17 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: all-ref-app
+  namespace: argocd
+spec:
+  destination:
+    namespace: default
+    server: https://kubernetes.default.svc
+  sources:
+    - repoURL: ./multisource-values
+      targetRevision: HEAD
+      ref: vals1
+    - repoURL: ./multisource-values
+      targetRevision: HEAD
+      ref: vals2
+  project: default
