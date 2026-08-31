@@ -2,8 +2,8 @@
 import tempfile
 from pathlib import Path
 
-from localargo.helm import build_template_cmd
-from localargo.models import HelmParameter, HelmSource
+from argocheck.helm import build_template_cmd
+from argocheck.models import HelmParameter, HelmSource
 
 
 def _source(**kwargs) -> HelmSource:
@@ -100,7 +100,7 @@ def test_ref_value_file_resolved_via_ref_map():
 
 
 def test_ref_value_file_unknown_ref_raises():
-    from localargo.helm import HelmError
+    from argocheck.helm import HelmError
     with tempfile.TemporaryDirectory() as tmp:
         src = _source(value_files=["$missing/prod.yaml"])
         with pytest.raises(HelmError, match="unknown ref"):
@@ -113,7 +113,7 @@ import pytest
 def test_read_helm_repos_parses_helm_env(monkeypatch):
     """_read_helm_repos extracts HELM_CONFIG_HOME from `helm env` output."""
     import subprocess
-    from localargo.helm import _read_helm_repos
+    from argocheck.helm import _read_helm_repos
     import yaml, tempfile, os
 
     with tempfile.TemporaryDirectory() as config_dir:
@@ -138,10 +138,10 @@ def test_read_helm_repos_parses_helm_env(monkeypatch):
 
 def test_ensure_dep_repos_raises_for_missing_alias(tmp_path, monkeypatch):
     """Alias-based dependency with no matching registered repo raises HelmError."""
-    from localargo.helm import HelmError, _ensure_dep_repos
+    from argocheck.helm import HelmError, _ensure_dep_repos
 
     # Patch _read_helm_repos to return an empty registry
-    monkeypatch.setattr("localargo.helm._read_helm_repos", lambda: {})
+    monkeypatch.setattr("argocheck.helm._read_helm_repos", lambda: {})
 
     deps = [{"name": "redis", "version": "17.0.0", "repository": "@myrepo"}]
     with pytest.raises(HelmError, match="unregistered helm repo alias"):
@@ -150,10 +150,10 @@ def test_ensure_dep_repos_raises_for_missing_alias(tmp_path, monkeypatch):
 
 def test_ensure_dep_repos_ok_when_alias_registered(tmp_path, monkeypatch):
     """No error when the alias is already in the helm repo registry."""
-    from localargo.helm import _ensure_dep_repos
+    from argocheck.helm import _ensure_dep_repos
 
     monkeypatch.setattr(
-        "localargo.helm._read_helm_repos",
+        "argocheck.helm._read_helm_repos",
         lambda: {"myrepo": "https://charts.example.com"},
     )
 
@@ -163,12 +163,12 @@ def test_ensure_dep_repos_ok_when_alias_registered(tmp_path, monkeypatch):
 
 def test_ensure_dep_repos_auto_registers_url(tmp_path, monkeypatch):
     """URL-based dependency is auto-registered when not in the registry."""
-    from localargo.helm import _ensure_dep_repos
+    from argocheck.helm import _ensure_dep_repos
 
     added = []
-    monkeypatch.setattr("localargo.helm._read_helm_repos", lambda: {})
-    monkeypatch.setattr("localargo.helm.helm_repo_add", lambda name, url: added.append((name, url)))
-    monkeypatch.setattr("localargo.helm.helm_repo_update", lambda: None)
+    monkeypatch.setattr("argocheck.helm._read_helm_repos", lambda: {})
+    monkeypatch.setattr("argocheck.helm.helm_repo_add", lambda name, url: added.append((name, url)))
+    monkeypatch.setattr("argocheck.helm.helm_repo_update", lambda: None)
 
     url = "https://charts.bitnami.com/bitnami"
     deps = [{"name": "nginx", "version": "18.0.0", "repository": url}]

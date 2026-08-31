@@ -1,4 +1,4 @@
-"""FastAPI web server for localargo."""
+"""FastAPI web server for argocheck."""
 from __future__ import annotations
 
 import asyncio
@@ -15,16 +15,16 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from localargo import recents as _recents
-from localargo.helm import HelmError, check_helm
-from localargo.models import AppNode, HelmSource
-from localargo.parser import ParseError, load_yaml_file, parse_application
-from localargo.walker import walk
+from argocheck import recents as _recents
+from argocheck.helm import HelmError, check_helm
+from argocheck.models import AppNode, HelmSource
+from argocheck.parser import ParseError, load_yaml_file, parse_application
+from argocheck.walker import walk
 
 _STATIC = Path(__file__).parent / "static"
 _EXECUTOR = ThreadPoolExecutor(max_workers=2)
 
-app = FastAPI(title="localargo", docs_url=None, redoc_url=None)
+app = FastAPI(title="argocheck", docs_url=None, redoc_url=None)
 
 
 # ── Serialisation ─────────────────────────────────────────────────────────────
@@ -112,7 +112,7 @@ def _do_render(req: RenderRequest) -> dict[str, Any]:
             return {"ok": False, "tree": None, "error": str(e)}
         root_dir = path.resolve().parent
 
-    with tempfile.TemporaryDirectory(prefix="localargo-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="argocheck-") as tmp:
         root_node = walk(
             root_node,
             tmp_dir=Path(tmp),
@@ -185,10 +185,10 @@ import click
 @click.option("--host", default="127.0.0.1", show_default=True, help="Host to bind to.")
 @click.option("--no-browser", is_flag=True, default=False, help="Do not open a browser tab.")
 def run(port: int, host: str, no_browser: bool) -> None:
-    """Start the localargo web interface."""
+    """Start the argocheck web interface."""
     import threading
     url = f"http://{host}:{port}"
     if not no_browser:
         threading.Timer(0.8, lambda: webbrowser.open(url)).start()
-    click.echo(f"localargo listening on {url}")
+    click.echo(f"argocheck listening on {url}")
     uvicorn.run(app, host=host, port=port, log_level="warning")

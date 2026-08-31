@@ -6,7 +6,7 @@ the git repository — individual charts live as subdirectories within it.
 
 ```
 basic-app-of-apps/         ← the "repo"
-  root-app.yaml            ← the root Application you point localargo at
+  root-app.yaml            ← the root Application you point argocheck at
   apps-chart/              ← umbrella chart (path: apps-chart)
   guestbook/               ← child chart (path: guestbook)
   podinfo/                 ← child chart (path: podinfo)
@@ -27,17 +27,17 @@ cd ~/my-argo-experiment
 ### 2. Substitute the path placeholder
 
 `root-app.yaml` and `apps-chart/values.yaml` both contain
-`LOCALARGO_EXAMPLES_PATH` in place of the absolute path to this directory.
+`ARGOCHECK_EXAMPLES_PATH` in place of the absolute path to this directory.
 Replace it in one step:
 
 ```bash
-grep -rl LOCALARGO_EXAMPLES_PATH . | xargs sed -i "s|LOCALARGO_EXAMPLES_PATH|$(pwd)|g"
+grep -rl ARGOCHECK_EXAMPLES_PATH . | xargs sed -i "s|ARGOCHECK_EXAMPLES_PATH|$(pwd)|g"
 ```
 
 ### 3. (Optional) Initialise a git repo to simulate a real GitOps setup
 
 ArgoCD fetches charts from git. To replicate this locally, initialise the
-directory as a git repository so localargo can clone it via the `file://` URL:
+directory as a git repository so argocheck can clone it via the `file://` URL:
 
 ```bash
 git init && git add . && git commit -m "init"
@@ -46,17 +46,17 @@ git init && git add . && git commit -m "init"
 Without this step the charts are read from disk as plain directories, which
 is faster and perfectly fine for experimenting with values and templates.
 
-### 4. Run localargo
+### 4. Run argocheck
 
 ```bash
 # CLI — tree view
-localargo root-app.yaml
+argocheck root-app.yaml
 
 # CLI — expand a specific child app
-localargo root-app.yaml --expand guestbook
+argocheck root-app.yaml --expand guestbook
 
 # Web interface
-localargo-web
+argocheck-web
 # then open http://localhost:8501, browse to root-app.yaml, and click Render
 ```
 
@@ -69,7 +69,7 @@ managed service. Each child Application also points back at the same repository
 URL (from `repoBase` in `apps-chart/values.yaml`) with its own `path` field
 selecting the correct chart subdirectory.
 
-localargo discovers the child Applications in the rendered output and
+argocheck discovers the child Applications in the rendered output and
 recursively renders their charts, producing the full resource tree.
 
 ## Customising

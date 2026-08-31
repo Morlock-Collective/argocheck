@@ -967,7 +967,7 @@ createApp({
       <aside class="sidebar" :style="{ width: sidebarWidth + 'px' }">
         <div class="sidebar-header">
           <span class="logo-icon">⎈</span>
-          <span class="logo">localargo</span>
+          <span class="logo">argocheck</span>
         </div>
 
         <!-- Path input -->

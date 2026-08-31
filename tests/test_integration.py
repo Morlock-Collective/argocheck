@@ -4,10 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from localargo.helm import run_template
-from localargo.models import AppNode, HelmParameter, HelmSource
-from localargo.parser import load_yaml_file, parse_application
-from localargo.walker import walk
+from argocheck.helm import run_template
+from argocheck.models import AppNode, HelmParameter, HelmSource
+from argocheck.parser import load_yaml_file, parse_application
+from argocheck.walker import walk
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

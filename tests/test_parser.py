@@ -2,7 +2,7 @@
 import pytest
 import yaml
 
-from localargo.parser import ParseError, parse_application, parse_all_applications
+from argocheck.parser import ParseError, parse_application, parse_all_applications
 
 
 MINIMAL_APP = """

@@ -1,10 +1,10 @@
-"""Persistent recently-used file list stored in ~/.localargo/recents.json."""
+"""Persistent recently-used file list stored in ~/.argocheck/recents.json."""
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
-_STORE = Path.home() / ".localargo" / "recents.json"
+_STORE = Path.home() / ".argocheck" / "recents.json"
 _MAX = 10
 
 

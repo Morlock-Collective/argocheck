@@ -173,7 +173,7 @@ def _resolve_helm_repo(source: HelmSource, tmp_dir: Path) -> Path:
         pull_dir.mkdir(parents=True, exist_ok=True)
         helm_pull(chart_ref, version, pull_dir)
     else:
-        repo_name = "localargo-" + _slug(repo_url)
+        repo_name = "argocheck-" + _slug(repo_url)
         helm_repo_add(repo_name, repo_url)
         helm_repo_update()
         chart_ref = f"{repo_name}/{chart_name}"

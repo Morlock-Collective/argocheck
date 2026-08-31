@@ -1,7 +1,7 @@
 # The repository URL for this monorepo. All charts live as subdirectories here.
-# Replace LOCALARGO_EXAMPLES_PATH with the absolute path to the basic-app-of-apps
+# Replace ARGOCHECK_EXAMPLES_PATH with the absolute path to the basic-app-of-apps
 # directory. See README.md for the one-liner that does this automatically.
-repoBase: "file:///LOCALARGO_EXAMPLES_PATH"
+repoBase: "file:///ARGOCHECK_EXAMPLES_PATH"
 
 guestbook:
   enabled: true

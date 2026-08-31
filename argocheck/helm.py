@@ -222,7 +222,7 @@ def _ensure_dep_repos(dependencies: list[dict[str, Any]], chart_path: Path) -> N
 
         elif repo.startswith(("http://", "https://", "oci://")):
             if repo not in registered_urls:
-                slug = "localargo-dep-" + hashlib.sha1(repo.encode()).hexdigest()[:8]
+                slug = "argocheck-dep-" + hashlib.sha1(repo.encode()).hexdigest()[:8]
                 helm_repo_add(slug, repo)
                 helm_repo_update()
 
@@ -231,7 +231,7 @@ def _ensure_dep_repos(dependencies: list[dict[str, Any]], chart_path: Path) -> N
         raise HelmError(
             f"Chart at {chart_path} references unregistered helm repo alias(es): "
             + ", ".join(f"@{a}" for a in missing_aliases)
-            + f"\nRegister them before running localargo:\n{cmds}",
+            + f"\nRegister them before running argocheck:\n{cmds}",
             cmd=[],
         )
 

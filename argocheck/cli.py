@@ -1,4 +1,4 @@
-"""CLI entry point for localargo."""
+"""CLI entry point for argocheck."""
 from __future__ import annotations
 
 import sys
@@ -40,7 +40,7 @@ from .walker import walk
     show_default=True,
     help="Maximum app-of-apps recursion depth.",
 )
-@click.version_option(package_name="localargo")
+@click.version_option(package_name="argocheck")
 def main(
     root_app: Path,
     expand_apps: tuple[str, ...],
@@ -71,7 +71,7 @@ def main(
     # Walk the tree inside a single temp directory
     # Resolve relative repoURLs in the root app relative to the manifest file's directory
     root_dir = root_app.resolve().parent
-    with tempfile.TemporaryDirectory(prefix="localargo-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="argocheck-") as tmp:
         tmp_dir = Path(tmp)
         root_node = walk(
             root_node,

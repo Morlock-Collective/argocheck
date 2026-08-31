@@ -3,10 +3,26 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "localargo"
+name = "argocheck"
 version = "0.1.0"
 description = "Local ArgoCD app-of-apps Helm validator and dry-runner"
+readme = "README.md"
+license = "MIT"
+authors = [
+    { name = "Jesper Lloyd", email = "jpl.lloyd@gmail.com" },
+]
 requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Testing",
+    "Topic :: System :: Systems Administration",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
 dependencies = [
     "click>=8.1",
     "rich>=13.0",
@@ -16,6 +32,11 @@ dependencies = [
     "uvicorn>=0.27",
 ]
 
+[project.urls]
+Homepage = "https://github.com/jplloyd/argo-mocker"
+Repository = "https://github.com/jplloyd/argo-mocker"
+Issues = "https://github.com/jplloyd/argo-mocker/issues"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
@@ -23,12 +44,12 @@ dev = [
 ]
 
 [project.scripts]
-localargo = "localargo.cli:main"
-localargo-web = "localargo.server:run"
+argocheck = "argocheck.cli:main"
+argocheck-web = "argocheck.server:run"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["localargo*"]
+include = ["argocheck*"]
 
 [tool.setuptools.package-data]
-localargo = ["static/*"]
+argocheck = ["static/*"]

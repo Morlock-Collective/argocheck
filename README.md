@@ -1,4 +1,4 @@
-# localargo
+# argocheck
 
 Local validator and dry-runner for ArgoCD app-of-apps Helm structures, including multi-source Applications.
 
@@ -8,7 +8,7 @@ installation required.
 
 ## What it does
 
-localargo walks an ArgoCD Application hierarchy the same way ArgoCD would:
+argocheck walks an ArgoCD Application hierarchy the same way ArgoCD would:
 
 1. Reads the root Application manifest
 2. Renders the source — runs `helm template` if the source is a Helm chart (has `Chart.yaml`), or reads all YAML files directly if it is a plain manifest directory
@@ -36,7 +36,7 @@ that was run.
 
 ```bash
 git clone <this repo>
-cd localargo
+cd argocheck
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .          # installs CLI and web interface
@@ -47,7 +47,7 @@ pip install -e .          # installs CLI and web interface
 ### Web interface
 
 ```bash
-localargo-web
+argocheck-web
 ```
 
 Starts a local web server on `http://localhost:8765` and opens it in your
@@ -67,7 +67,7 @@ The interface provides:
 ### CLI
 
 ```
-localargo [OPTIONS] ROOT_APP
+argocheck [OPTIONS] ROOT_APP
 ```
 
 `ROOT_APP` is the path to a YAML file containing the root `kind: Application`
@@ -88,7 +88,7 @@ manifest.
 **Render and display the tree:**
 
 ```bash
-localargo root-app.yaml
+argocheck root-app.yaml
 ```
 
 ```
@@ -103,19 +103,19 @@ Using v3.17.0
 **Expand a specific app's manifests inline:**
 
 ```bash
-localargo root-app.yaml --expand frontend
+argocheck root-app.yaml --expand frontend
 ```
 
 **Dump the full YAML of a specific app:**
 
 ```bash
-localargo root-app.yaml --show backend
+argocheck root-app.yaml --show backend
 ```
 
 **With ArgoCD build environment variables:**
 
 ```bash
-localargo root-app.yaml --argocd-env
+argocheck root-app.yaml --argocd-env
 ```
 
 This passes the following dummy values to each `helm template` call via
@@ -133,12 +133,12 @@ ARGOCD_APP_SOURCE_TARGET_REVISION       = HEAD
 
 ### Exit code
 
-`localargo` exits 0 if the entire tree renders without errors, and 1 if any
+`argocheck` exits 0 if the entire tree renders without errors, and 1 if any
 application fails.
 
 ## Chart source types
 
-localargo resolves chart sources the same way ArgoCD does:
+argocheck resolves chart sources the same way ArgoCD does:
 
 ### Local path
 
@@ -191,7 +191,7 @@ source:
 ```
 
 > Git sources require `git` on your `PATH`. The repo is cloned with
-> `--depth 1` into a temporary directory that is deleted when localargo exits.
+> `--depth 1` into a temporary directory that is deleted when argocheck exits.
 
 ## Helm values precedence
 
