@@ -1,10 +1,13 @@
 # argocheck
 
-Local validator and dry-runner for ArgoCD app-of-apps Helm structures, including multi-source Applications.
+Local validator, dry-runner, and diff tool for ArgoCD app-of-apps Helm
+structures, including multi-source Applications.
 
 Point it at a root `kind: Application` manifest and it recursively renders the
 entire application tree using your local `helm` binary — no cluster, no ArgoCD
-installation required.
+installation required. The web interface also lets you structurally diff any
+two apps in the rendered tree, resource by resource, for manual verification
+of changes before they go anywhere near a cluster.
 
 ## What it does
 
@@ -19,6 +22,10 @@ argocheck walks an ArgoCD Application hierarchy the same way ArgoCD would:
 If anything fails — a missing chart, bad values, a broken template — the error
 is shown inline at the point of failure, along with the exact `helm` command
 that was run.
+
+The web interface additionally supports diffing any two apps in the rendered
+tree against each other, matching child apps and resources up structurally
+and showing a line-level diff per changed resource — see [Diff mode](#diff-mode).
 
 ## What it does not do
 
@@ -63,6 +70,36 @@ The interface provides:
 - **Application YAML toggle** — switches between the compact source view and
   the raw Application manifest YAML
 - **Error display** — the failing helm command and wrapped stderr output
+- **Diff mode** — structural comparison between any two apps in the rendered
+  tree (see below)
+
+#### Diff mode
+
+Once a tree has rendered, any two applications in it can be compared
+side-by-side — useful for checking that a "staging" and "prod" subtree (or any
+two overlay/environment branches present in the same app-of-apps tree) only
+differ where expected.
+
+To use it:
+
+1. Open the **Diff** section in the sidebar and check **Compare two branches**.
+2. Assign **Branch A** and **Branch B**, either from the dropdowns or by
+   right-clicking any row in the application tree and choosing *Assign to diff
+   branch A/B* — the assigned rows get an `A`/`B` badge.
+
+Child apps under each branch are matched by their path relative to the chosen
+root, and resources within each matched pair are matched by `kind`/`name`.
+Each resource is shown as **Identical**, **Changed** (with a line-level diff),
+**Added**, or **Removed**, and each app subtree as a whole is flagged
+**Only in A** / **Only in B** if it has no counterpart on the other side.
+**Show identical** toggles whether unchanged apps/resources are hidden or
+listed, and **Diff style** switches between a minimal (context-collapsed) and
+full-context line diff.
+
+Diff mode compares two subtrees of the *same* render — it does not fetch or
+render a second revision, so to diff two git refs of the same chart, point
+`repoURL`/`targetRevision` in your Application manifest at each ref as
+separate sibling apps (or child apps) in the tree first, then diff those.
 
 ### CLI
 
