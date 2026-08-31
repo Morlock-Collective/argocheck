@@ -24,6 +24,24 @@ jobs:
             echo "::error::Tag $GITHUB_REF_NAME does not match pyproject.toml version $PROJECT_VERSION"
             exit 1
           fi
+          echo "TAG_VERSION=$TAG_VERSION" >> "$GITHUB_ENV"
+
+      - name: Extract CHANGELOG.md section for this version
+        run: |
+          awk -v ver="$TAG_VERSION" '
+            BEGIN { found=0 }
+            /^## \[/ {
+              if (found) exit
+              if ($0 ~ "\\[" ver "\\]") { found=1; next }
+            }
+            found { print }
+          ' CHANGELOG.md | grep -v '^\[[^]]*\]: ' > release-notes.md
+
+          if [ ! -s release-notes.md ]; then
+            echo "::error::No '## [$TAG_VERSION]' section found in CHANGELOG.md"
+            exit 1
+          fi
+          cat release-notes.md
 
       - name: Install build tooling
         run: pip install build twine
@@ -40,10 +58,15 @@ jobs:
           /tmp/smoke-test-venv/bin/pip install dist/*.whl
           /tmp/smoke-test-venv/bin/argocheck --version
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-notes
+          path: release-notes.md
 
   publish:
     name: Publish to PyPI
@@ -56,9 +79,31 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist/
 
       - uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    name: Create GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-notes
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          body_path: release-notes.md
+          files: dist/*
