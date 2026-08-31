@@ -54,7 +54,14 @@ def _ser_source(s: HelmSource) -> dict[str, Any]:
     }
 
 
-def _ser_node(node: AppNode) -> dict[str, Any]:
+def _ser_node(node: AppNode, tmp_dir: Path) -> dict[str, Any]:
+    # chart_dir may point into tmp_dir (e.g. a git/local-git scratch clone), which
+    # is deleted once this request finishes — never surface a path the client
+    # can't actually use.
+    chart_dir = node.chart_dir
+    durable_chart_dir = (
+        chart_dir is not None and tmp_dir.resolve() not in chart_dir.resolve().parents
+    )
     return {
         "name": node.name,
         "namespace": node.namespace,
@@ -62,9 +69,9 @@ def _ser_node(node: AppNode) -> dict[str, Any]:
         "isMultiSource": node.is_multi_source,
         "manifests": node.manifests,
         "appManifest": node.app_manifest,
-        "chartDir": str(node.chart_dir) if node.chart_dir else None,
+        "chartDir": str(chart_dir) if durable_chart_dir else None,
         "error": _ser_error(node.error),
-        "children": [_ser_node(c) for c in node.children],
+        "children": [_ser_node(c, tmp_dir) for c in node.children],
     }
 
 
@@ -113,15 +120,16 @@ def _do_render(req: RenderRequest) -> dict[str, Any]:
         root_dir = path.resolve().parent
 
     with tempfile.TemporaryDirectory(prefix="argocheck-") as tmp:
+        tmp_dir = Path(tmp)
         root_node = walk(
             root_node,
-            tmp_dir=Path(tmp),
+            tmp_dir=tmp_dir,
             argocd_env=req.argocd_env,
             max_depth=req.max_depth,
             _parent_chart_dir=root_dir,
         )
 
-    return {"ok": True, "tree": _ser_node(root_node), "error": None}
+    return {"ok": True, "tree": _ser_node(root_node, tmp_dir), "error": None}
 
 
 # ── API routes ────────────────────────────────────────────────────────────────

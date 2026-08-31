@@ -134,10 +134,15 @@ def _resolve_local_git(repo_path: Path, revision: str, tmp_dir: Path) -> Path:
     dest = tmp_dir / "local-git" / _slug(f"{repo_path}@{revision}")
 
     if dest.exists():
-        cached_sha = subprocess.run(
-            ["git", "-C", str(dest), "rev-parse", "HEAD"],
-            capture_output=True, text=True, check=True,
-        ).stdout.strip()
+        try:
+            cached_sha = subprocess.run(
+                ["git", "-C", str(dest), "rev-parse", "HEAD"],
+                capture_output=True, text=True, check=True,
+            ).stdout.strip()
+        except subprocess.CalledProcessError:
+            # Corrupt or partial cache (e.g. an interrupted previous run) — discard
+            # it and clone fresh below rather than crashing.
+            cached_sha = None
         if cached_sha == target_sha:
             return dest
         shutil.rmtree(dest)
@@ -148,13 +153,20 @@ def _resolve_local_git(repo_path: Path, revision: str, tmp_dir: Path) -> Path:
             ["git", "clone", "--quiet", str(repo_path), str(dest)],
             capture_output=True, text=True, check=True,
         )
+    except subprocess.CalledProcessError as e:
+        raise ResolveError(
+            f"failed to clone local repo {repo_path}:\n{e.stderr}"
+        )
+
+    try:
         subprocess.run(
             ["git", "-C", str(dest), "checkout", "--quiet", "--detach", target_sha],
             capture_output=True, text=True, check=True,
         )
     except subprocess.CalledProcessError as e:
+        shutil.rmtree(dest)
         raise ResolveError(
-            f"failed to clone local repo {repo_path} at revision {revision!r}:\n{e.stderr}"
+            f"failed to check out revision {revision!r} in local repo {repo_path}:\n{e.stderr}"
         )
 
     return dest

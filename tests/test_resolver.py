@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from argocheck.models import HelmSource
-from argocheck.resolver import ResolveError, resolve_source
+from argocheck.resolver import ResolveError, _slug, resolve_source
 
 
 def _git(*args: str, cwd: Path) -> str:
@@ -111,6 +111,26 @@ def test_resolve_local_git_unknown_revision_raises(local_repo):
     with tempfile.TemporaryDirectory() as tmp:
         with pytest.raises(ResolveError, match="does-not-exist"):
             resolve_source(src, tmp_dir=Path(tmp))
+
+
+def test_resolve_local_git_recovers_from_corrupt_cache(local_repo):
+    """A corrupt/partial cache directory (e.g. left behind by a killed previous
+    run) must be discarded and re-cloned, not crash with an unhandled error."""
+    repo, v1_sha = local_repo
+    src = HelmSource(repo_url=str(repo), target_revision="feature")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_dir = Path(tmp)
+        # Pre-populate the cache slot with a non-git directory to simulate corruption.
+        dest = tmp_dir / "local-git" / _slug(f"{repo}@feature")
+        dest.mkdir(parents=True)
+        (dest / "garbage.txt").write_text("not a git repo")
+
+        resolved = resolve_source(src, tmp_dir=tmp_dir)
+
+        assert resolved == dest
+        assert (resolved / "values.yaml").read_text() == "replicaCount: 1\n"
+        assert _git("rev-parse", "HEAD", cwd=resolved) == v1_sha
 
 
 def test_resolve_local_non_git_directory_ignores_revision():
