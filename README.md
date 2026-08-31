@@ -152,6 +152,14 @@ source:
   targetRevision: HEAD
 ```
 
+If `repoURL` points at a directory that is itself a git repo and
+`targetRevision` is set to anything other than `HEAD`, that revision (branch,
+tag, or commit) is checked out into a scratch clone instead of using the
+working tree as-is — mirroring ArgoCD's behavior for git sources. `HEAD` (the
+default) always uses the working tree directly, uncommitted changes included.
+The same local repo can be referenced at multiple revisions across sources
+without conflict. Non-git local directories ignore `targetRevision` entirely.
+
 ### Helm chart repository (HTTP or OCI)
 
 `chart` must be set. `targetRevision` is the chart version.

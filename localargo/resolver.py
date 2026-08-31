@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -31,7 +32,7 @@ def resolve_source(
         repo_url = repo_url[len("file://"):]
 
     if _is_local(repo_url):
-        return _resolve_local(repo_url, source, working_dir, require_chart)
+        return _resolve_local(repo_url, source, working_dir, require_chart, tmp_dir)
 
     if source.chart and (repo_url.startswith("oci://") or _is_http(repo_url)):
         return _resolve_helm_repo(source, tmp_dir)
@@ -39,7 +40,7 @@ def resolve_source(
     if _is_git(repo_url):
         return _resolve_git(source, tmp_dir, require_chart)
 
-    return _resolve_local(repo_url, source, working_dir, require_chart)
+    return _resolve_local(repo_url, source, working_dir, require_chart, tmp_dir)
 
 
 def resolve_ref_map(
@@ -86,9 +87,18 @@ def _resolve_local(
     source: HelmSource,
     working_dir: Path | None,
     require_chart: bool,
+    tmp_dir: Path,
 ) -> Path:
     base = working_dir or Path.cwd()
     chart_base = Path(repo_url) if Path(repo_url).is_absolute() else base / repo_url
+    chart_base = chart_base.resolve()
+
+    if not chart_base.exists():
+        raise ResolveError(f"Local chart path does not exist: {chart_base}")
+
+    revision = source.target_revision
+    if revision not in ("HEAD", "", None) and (chart_base / ".git").exists():
+        chart_base = _resolve_local_git(chart_base, revision, tmp_dir)
 
     chart_path = (chart_base / source.path) if source.path else chart_base
     chart_path = chart_path.resolve()
@@ -98,6 +108,56 @@ def _resolve_local(
     if require_chart and not (chart_path / "Chart.yaml").exists():
         raise ResolveError(f"No Chart.yaml found in {chart_path}")
     return chart_path
+
+
+def _resolve_local_git(repo_path: Path, revision: str, tmp_dir: Path) -> Path:
+    """
+    Clone a local git repo at a specific revision into a scratch directory under
+    tmp_dir, so targetRevision is honored for local paths that are themselves git
+    repos (instead of always using the working tree as-is).
+
+    Keyed by repo path + revision, so the same local repo referenced multiple
+    times at different revisions never collides. The clone is reused across
+    calls as long as it's still at the target commit; if the revision has moved
+    (e.g. a branch got new commits) since the last run, it's re-cloned.
+    """
+    try:
+        target_sha = subprocess.run(
+            ["git", "-C", str(repo_path), "rev-parse", revision],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+    except subprocess.CalledProcessError as e:
+        raise ResolveError(
+            f"revision {revision!r} not found in local repo {repo_path}:\n{e.stderr}"
+        )
+
+    dest = tmp_dir / "local-git" / _slug(f"{repo_path}@{revision}")
+
+    if dest.exists():
+        cached_sha = subprocess.run(
+            ["git", "-C", str(dest), "rev-parse", "HEAD"],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        if cached_sha == target_sha:
+            return dest
+        shutil.rmtree(dest)
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        subprocess.run(
+            ["git", "clone", "--quiet", str(repo_path), str(dest)],
+            capture_output=True, text=True, check=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(dest), "checkout", "--quiet", "--detach", target_sha],
+            capture_output=True, text=True, check=True,
+        )
+    except subprocess.CalledProcessError as e:
+        raise ResolveError(
+            f"failed to clone local repo {repo_path} at revision {revision!r}:\n{e.stderr}"
+        )
+
+    return dest
 
 
 def _resolve_helm_repo(source: HelmSource, tmp_dir: Path) -> Path:
