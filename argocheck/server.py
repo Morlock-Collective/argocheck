@@ -19,6 +19,7 @@ from argocheck import recents as _recents
 from argocheck.helm import HelmError, check_helm
 from argocheck.models import AppNode, HelmSource
 from argocheck.parser import ParseError, load_yaml_file, parse_application
+from argocheck.valuetree import ValueTreeError, build_leaf_node, parse_leaves
 from argocheck.walker import walk
 
 _STATIC = Path(__file__).parent / "static"
@@ -82,6 +83,15 @@ class RenderRequest(BaseModel):
     argocd_env: bool = False
     max_depth: int = 10
     values_override: str | None = None
+    # Optional value-tree (environment map) add-on, fanning `path`'s root out
+    # across a nested value map instead of rendering it once. At most one of
+    # these two should be set (the client's radio button enforces this).
+    env_map_path: str | None = None
+    env_map_yaml: str | None = None
+    # None => just enumerate leaves, don't render anything yet (cheap, no
+    # helm calls). A list => render exactly those leaves (by their
+    # "/"-joined display path).
+    selected_leaves: list[str] | None = None
 
 
 def _chart_root_node(chart_dir: Path, values_override: str | None) -> AppNode:
@@ -95,6 +105,27 @@ def _chart_root_node(chart_dir: Path, values_override: str | None) -> AppNode:
 
     source = HelmSource(repo_url=str(chart_dir), values=values_override or None)
     return AppNode(name=name, namespace="default", sources=[source])
+
+
+def _load_env_map_doc(req: RenderRequest) -> tuple[dict[str, Any] | None, str | None]:
+    """Load the optional env-map doc from either field. Returns (doc, error)."""
+    if req.env_map_path and req.env_map_yaml:
+        return None, "Provide either an env-map file path or pasted YAML, not both."
+    if req.env_map_path:
+        try:
+            doc = load_yaml_file(Path(req.env_map_path).expanduser())
+        except ParseError as e:
+            return None, str(e)
+        return doc, None
+    if req.env_map_yaml:
+        try:
+            doc = yaml.safe_load(req.env_map_yaml)
+        except yaml.YAMLError as e:
+            return None, f"Invalid env-map YAML: {e}"
+        if not isinstance(doc, dict):
+            return None, "Pasted env-map YAML must be a mapping."
+        return doc, None
+    return None, None
 
 
 def _do_render(req: RenderRequest) -> dict[str, Any]:
@@ -119,6 +150,12 @@ def _do_render(req: RenderRequest) -> dict[str, Any]:
             return {"ok": False, "tree": None, "error": str(e)}
         root_dir = path.resolve().parent
 
+    env_map_doc, error = _load_env_map_doc(req)
+    if error:
+        return {"ok": False, "tree": None, "error": error}
+    if env_map_doc is not None:
+        return _do_render_with_env_map(root_node, root_dir, env_map_doc, req)
+
     with tempfile.TemporaryDirectory(prefix="argocheck-") as tmp:
         tmp_dir = Path(tmp)
         root_node = walk(
@@ -129,7 +166,45 @@ def _do_render(req: RenderRequest) -> dict[str, Any]:
             _parent_chart_dir=root_dir,
         )
 
-    return {"ok": True, "tree": _ser_node(root_node, tmp_dir), "error": None}
+    return {"ok": True, "tree": _ser_node(root_node, tmp_dir), "error": None, "valueTree": False, "leaves": []}
+
+
+def _do_render_with_env_map(
+    root_node: AppNode, root_dir: Path, env_map_doc: dict[str, Any], req: RenderRequest
+) -> dict[str, Any]:
+    try:
+        leaves = parse_leaves(env_map_doc)
+    except ValueTreeError as e:
+        return {"ok": False, "tree": None, "error": str(e)}
+
+    all_paths = [leaf.display_path for leaf in leaves]
+
+    if req.selected_leaves is None:
+        # Phase 1: enumerate only — cheap, no helm invocations. The client
+        # shows a checkbox tree and asks again with an explicit selection.
+        return {"ok": True, "tree": None, "error": None, "valueTree": True, "leaves": all_paths}
+
+    selected = set(req.selected_leaves)
+    chosen = [leaf for leaf in leaves if leaf.display_path in selected]
+    if not chosen:
+        return {"ok": False, "tree": None, "error": "No leaves selected."}
+
+    leaf_nodes = [build_leaf_node(root_node, leaf) for leaf in chosen]
+    root_node.children = leaf_nodes
+
+    with tempfile.TemporaryDirectory(prefix="argocheck-") as tmp:
+        tmp_dir = Path(tmp)
+        for leaf_node in leaf_nodes:
+            walk(
+                leaf_node,
+                tmp_dir=tmp_dir,
+                argocd_env=req.argocd_env,
+                max_depth=req.max_depth,
+                _parent_chart_dir=root_dir,
+            )
+        tree = _ser_node(root_node, tmp_dir)
+
+    return {"ok": True, "tree": tree, "error": None, "valueTree": True, "leaves": all_paths}
 
 
 # ── API routes ────────────────────────────────────────────────────────────────
@@ -200,3 +275,7 @@ def run(port: int, host: str, no_browser: bool) -> None:
         threading.Timer(0.8, lambda: webbrowser.open(url)).start()
     click.echo(f"argocheck listening on {url}")
     uvicorn.run(app, host=host, port=port, log_level="warning")
+
+
+if __name__ == "__main__":
+    run()

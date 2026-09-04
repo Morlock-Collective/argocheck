@@ -1,0 +1,34 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "argocheck: Web UI",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "module": "argocheck.server",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "argocheck: CLI (sample app)",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "module": "argocheck.cli",
+      "args": ["${workspaceFolder}/tests/fixtures/root-app-simple.yaml"],
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "argocheck: CLI (value tree, --select prod)",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "module": "argocheck.cli",
+      "args": ["${workspaceFolder}/tests/fixtures/value-tree-clusters.yaml", "--select", "prod"],
+      "console": "integratedTerminal",
+      "justMyCode": true
+    }
+  ]
+}

@@ -27,9 +27,16 @@ The web interface additionally supports diffing any two apps in the rendered
 tree against each other, matching child apps and resources up structurally
 and showing a line-level diff per changed resource — see [Diff mode](#diff-mode).
 
+An optional [environment map](#environment-maps-value-trees) can also fan a
+root app out across many environments (e.g. every cluster/namespace
+combination) from a separate value-tree file, instead of hand-writing an
+Application manifest per environment.
+
 ## What it does not do
 
-- No ApplicationSet support
+- No ApplicationSet support — [value trees](#environment-maps-value-trees)
+  cover the common local dry-run/diff use case, but this isn't a general
+  ApplicationSet generator implementation
 - No target cluster or server resolution — `spec.destination.namespace` is used as `--namespace` in `helm template`, but the server field is ignored
 - No Sync waves or Sync hooks (those resources are treated like any other)
 
@@ -172,6 +179,71 @@ ARGOCD_APP_SOURCE_TARGET_REVISION       = HEAD
 
 `argocheck` exits 0 if the entire tree renders without errors, and 1 if any
 application fails.
+
+## Environment maps (value trees)
+
+An environment map (a.k.a. value tree) is an **optional add-on** to a normal
+root Application/chart: instead of requiring a hand-written `kind:
+Application` manifest per environment, it fans your existing root out across
+a nested value map (e.g. cluster → namespace). Each leaf of the map becomes
+its own rendered app, cloned from the exact same root you already pointed
+`argocheck` at, with the tree path and the leaf's own key/value pairs passed
+in as extra Helm `--set` parameters — so `clusters.prod.ns-a.replicaCount:
+"3"` becomes `--set cluster=prod --set namespace=ns-a --set replicaCount=3`
+on top of whatever that root app already declares. It's a separate file from
+the root Application — it never contains a chart reference itself.
+
+```yaml
+argocheck_root: clusters                    # which top-level key holds the tree
+argocheck_leaf_depth: 2                     # how many levels of keyed nesting before the leaf's own values
+argocheck_variable_mappings:                # one entry per level (leaf_depth + 1), "" = no variable bound
+  - ""                                      # depth 0: the "clusters" container itself
+  - "cluster"                               # depth 1: each cluster name -> --set cluster=<key>
+  - "namespace"                             # depth 2: each namespace name -> --set namespace=<key>
+
+clusters:
+  prod:
+    ns-a:
+      sourceRepo: https://github.com/my-org/prod-values.git
+    ns-b:
+      sourceRepo: https://github.com/my-org/prod-values.git
+  qa:
+    ns-a:
+      sourceRepo: https://github.com/my-org/qa-values.git
+```
+
+Point `argocheck` at your root app exactly as usual, and pass the environment
+map as an extra `--env-map` flag:
+
+```bash
+argocheck root-app.yaml --env-map env-map.yaml                     # render every leaf
+argocheck root-app.yaml --env-map env-map.yaml --select prod       # only leaves under "prod"
+argocheck root-app.yaml --env-map env-map.yaml --select prod/ns-a  # a single leaf
+argocheck root-app.yaml --env-map env-map.yaml --show prod-ns-a    # full YAML for one leaf
+```
+
+`--select` is only valid together with `--env-map`.
+
+Each leaf's release name (and tree-view label) is its path hyphen-joined
+(`prod-ns-a`). Tree-supplied parameters — both the path variables and the
+leaf's own key/value pairs — are appended *after* the root app's own first
+source's `helm.parameters`, so they win via Helm's last-`--set`-wins
+precedence. Only the root's first source is touched (a multi-source root's
+other sources, e.g. a `$ref` values source, are carried over unchanged), and
+this only applies to the root being fanned out — any child Applications it
+renders resolve their own parameters independently as usual.
+
+Since every leaf renders as an ordinary app in the tree, [Diff mode](#diff-mode)
+works across them for free — assign `prod-ns-a` as Branch A and `qa-ns-a` as
+Branch B to compare environments resource-by-resource.
+
+In the web interface, the root path input works exactly as always. An
+**Environment map (optional)** section in the sidebar lets you attach one,
+either as a file path or pasted YAML. Once attached, clicking **Render**
+enumerates the leaves (no `helm template` calls yet — instant) and shows an
+**Environments** checkbox tree instead of rendering immediately; check the
+environments you want (a parent checkbox selects/deselects every leaf under
+it) and click **Render selected** to render only those.
 
 ## Chart source types
 

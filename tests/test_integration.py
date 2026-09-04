@@ -7,6 +7,7 @@ import pytest
 from argocheck.helm import run_template
 from argocheck.models import AppNode, HelmParameter, HelmSource
 from argocheck.parser import load_yaml_file, parse_application
+from argocheck.valuetree import build_leaf_node, parse_leaves
 from argocheck.walker import walk
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -216,3 +217,32 @@ def test_walk_multi_source_three_sources_mixed():
     assert by_kind["Deployment"]["spec"]["replicas"] == 4
     # child-chart does not reference the ref -> keeps its own default (1)
     assert by_kind["ConfigMap"]["data"]["replicaCount"] == "1"
+
+
+def test_value_tree_fans_out_one_chart_across_all_leaves():
+    """An env-map file layered onto a real root app renders one AppNode per
+    leaf, each getting its own tree-derived --set overrides on top of the
+    same shared chart (and the root app's own parameters/values)."""
+    root_doc = load_yaml_file(FIXTURES / "root-app-simple.yaml")
+    root_node = parse_application(root_doc)
+    root_node.sources[0].repo_url = str(FIXTURES / "simple-chart")
+
+    env_doc = load_yaml_file(FIXTURES / "value-tree-clusters.yaml")
+    leaves = parse_leaves(env_doc)
+    leaf_nodes = {leaf.display_path: build_leaf_node(root_node, leaf) for leaf in leaves}
+    assert set(leaf_nodes) == {"prod/ns-a", "prod/ns-b", "qa/ns-a"}
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_dir = Path(tmp)
+        for node in leaf_nodes.values():
+            walk(node, tmp_dir=tmp_dir)
+
+    for path, expected_replicas in [("prod/ns-a", 3), ("prod/ns-b", 5), ("qa/ns-a", 1)]:
+        node = leaf_nodes[path]
+        assert node.error is None
+        assert len(node.manifests) == 1
+        deployment = node.manifests[0]
+        assert deployment["kind"] == "Deployment"
+        assert deployment["spec"]["replicas"] == expected_replicas
+        # Release name (hyphenated tree path) flows through to resource naming.
+        assert deployment["metadata"]["name"] == f"{node.name}-nginx"
