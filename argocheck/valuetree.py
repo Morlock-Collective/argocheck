@@ -10,6 +10,7 @@ a value tree only ever describes the fan-out, never the chart reference.
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -83,6 +84,35 @@ def parse_leaves(doc: dict[str, Any]) -> list[ValueTreeLeaf]:
     return leaves
 
 
+def _encode_leaf_value(value: Any) -> tuple[str, bool]:
+    """Encode one leaf key's value for a Helm parameter. Returns (value, is_json).
+
+    Lists and mappings are JSON-encoded and applied via --set-json, the only
+    --set-family flag that can carry a structured value at all. Note this is
+    *not* the highest-precedence flag Helm has — empirically (confirmed
+    against a real `helm template`), Helm's fixed precedence order is
+    --set-literal > --set-string > --set > --set-json > -f files, regardless
+    of the order flags are given on the command line. So a leaf's structured
+    value here will always beat any values file (including the chart's own
+    values.yaml), but would lose to a same-key plain --set/--set-string
+    parameter declared elsewhere on the same source — an inherent Helm
+    limitation, not something any flag choice or ordering can work around.
+
+    Scalars stay on plain --set (highest precedence achievable for a leaf
+    value that might collide with a same-key base-app parameter), just
+    correctly cased for bool/None — Python's str(True)/str(None) ("True"/
+    "None") would otherwise be read back by Helm as those literal *strings*,
+    not the boolean/null they're meant to be.
+    """
+    if isinstance(value, (list, dict)):
+        return json.dumps(value), True
+    if isinstance(value, bool):
+        return ("true" if value else "false"), False
+    if value is None:
+        return "null", False
+    return str(value), False
+
+
 def _walk(
     node: Any,
     depth: int,
@@ -99,7 +129,8 @@ def _walk(
     if depth > leaf_depth:
         leaf_params = list(params)
         for key, value in node.items():
-            leaf_params.append(HelmParameter(str(key), str(value)))
+            encoded, is_json = _encode_leaf_value(value)
+            leaf_params.append(HelmParameter(str(key), encoded, is_json=is_json))
         out.append(ValueTreeLeaf(path=path, parameters=leaf_params))
         return
 

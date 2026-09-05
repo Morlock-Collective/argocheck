@@ -73,6 +73,14 @@ def test_parameters_set_flags():
         assert "replicas=3" in cmd
 
 
+def test_parameter_is_json_uses_set_json_flag():
+    with tempfile.TemporaryDirectory() as tmp:
+        src = _source(parameters=[HelmParameter("tags", '["a","b"]', is_json=True)])
+        cmd = build_template_cmd(Path("/c"), src, "r", "ns", Path(tmp))
+        assert "--set-json" in cmd
+        assert 'tags=["a","b"]' in cmd
+
+
 def test_argocd_env_flags():
     with tempfile.TemporaryDirectory() as tmp:
         src = _source()

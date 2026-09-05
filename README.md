@@ -250,6 +250,32 @@ source, are carried over unchanged), and this only applies to the root being
 fanned out — any child Applications it renders resolve their own parameters
 independently as usual.
 
+A leaf's own values aren't limited to scalars — lists and nested mappings
+work too:
+
+```yaml
+clusters:
+  prod:
+    ns-a:
+      image:
+        repository: custom-repo
+        tag: v2
+      tags: [blue, green]
+```
+
+Scalars are passed via plain `--set` as above. Lists/mappings can't be
+expressed that way at all, so they're JSON-encoded and passed via Helm's
+`--set-json`. One real caveat, confirmed against actual `helm template`
+runs: Helm's flags have a fixed precedence *regardless of the order they're
+given in* — `--set-literal` > `--set-string` > `--set` > `--set-json` > `-f`
+values files. So a leaf's list/mapping value here reliably beats the chart's
+own `values.yaml` and any `-f` file, but would lose to a plain `--set`
+parameter targeting that *same key* declared elsewhere (e.g. in the root
+app's own `helm.parameters`) — an inherent Helm limitation no flag choice or
+ordering can work around. In practice this only matters if a key set via a
+structured leaf value collides with a scalar the root app's own parameters
+also set for that exact key.
+
 Since every leaf renders as an ordinary app in the tree, [Diff mode](#diff-mode)
 works across them for free — assign `my-app (prod/ns-a)` as Branch A and
 `my-app (qa/ns-a)` as Branch B to compare environments resource-by-resource.

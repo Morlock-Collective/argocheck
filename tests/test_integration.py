@@ -282,3 +282,31 @@ def test_value_tree_leaves_render_identical_resources_when_tree_values_are_unuse
 
     manifests = [n.manifests for n in leaf_nodes]
     assert all(m == manifests[0] for m in manifests), manifests
+
+
+def test_value_tree_leaf_map_and_list_values_render_correctly():
+    """A leaf value that's a nested mapping (not just a scalar) must reach
+    the chart intact via --set-json, correctly overriding the base chart's
+    own nested `image` value field-by-field."""
+    root_doc = load_yaml_file(FIXTURES / "root-app-simple.yaml")
+    root_node = parse_application(root_doc)
+    root_node.sources[0].repo_url = str(FIXTURES / "simple-chart")
+
+    env_doc = {
+        "argocheck_root": "envs",
+        "argocheck_leaf_depth": 1,
+        "argocheck_variable_mappings": ["", "env"],
+        "envs": {
+            "prod": {"image": {"repository": "custom-repo", "tag": "v2"}},
+        },
+    }
+    leaves = parse_leaves(env_doc)
+    leaf = leaves[0]
+    node = build_leaf_node(root_node, leaf)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        walk(node, tmp_dir=Path(tmp))
+
+    assert node.error is None
+    deployment = node.manifests[0]
+    assert deployment["spec"]["template"]["spec"]["containers"][0]["image"] == "custom-repo:v2"

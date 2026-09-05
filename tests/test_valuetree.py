@@ -1,9 +1,12 @@
 """Tests for value-tree (environment map) parsing and leaf enumeration."""
+import json
+
 import pytest
 
 from argocheck.models import AppNode, HelmSource
 from argocheck.valuetree import (
     ValueTreeError,
+    _encode_leaf_value,
     build_leaf_node,
     is_value_tree,
     matches_selection,
@@ -192,3 +195,43 @@ def test_build_leaf_node_preserves_explicit_base_release_name():
 
     assert node.name == "my-app (prod/ns-b)"
     assert node.sources[0].release_name == "explicit-release"
+
+
+def test_encode_leaf_value_scalars_use_plain_set():
+    assert _encode_leaf_value("prod") == ("prod", False)
+    assert _encode_leaf_value(3) == ("3", False)
+    assert _encode_leaf_value(3.5) == ("3.5", False)
+    # Python's str(True)/str(None) ("True"/"None") would be read back by Helm
+    # as those literal strings, not the boolean/null they're meant to be —
+    # must come out lowercase so plain --set parses them correctly.
+    assert _encode_leaf_value(True) == ("true", False)
+    assert _encode_leaf_value(False) == ("false", False)
+    assert _encode_leaf_value(None) == ("null", False)
+
+
+def test_encode_leaf_value_structures_use_set_json():
+    value, is_json = _encode_leaf_value(["a", "b", 3])
+    assert is_json is True
+    assert json.loads(value) == ["a", "b", 3]
+
+    value, is_json = _encode_leaf_value({"nested": {"key": [1, 2]}})
+    assert is_json is True
+    assert json.loads(value) == {"nested": {"key": [1, 2]}}
+
+
+def test_leaf_list_and_map_values_become_json_parameters():
+    doc = _doc()
+    doc["clusters"]["prod"]["ns-a"] = {
+        "tags": ["blue", "green"],
+        "config": {"retries": 3, "enabled": True},
+    }
+    leaves = parse_leaves(doc)
+    leaf = next(leaf for leaf in leaves if leaf.display_path == "prod/ns-a")
+    params = {p.name: p for p in leaf.parameters}
+
+    assert params["tags"].is_json is True
+    assert json.loads(params["tags"].value) == ["blue", "green"]
+    assert params["config"].is_json is True
+    assert json.loads(params["config"].value) == {"retries": 3, "enabled": True}
+    # Path variables (from dict keys) are always plain strings, unaffected.
+    assert params["cluster"].is_json is False
