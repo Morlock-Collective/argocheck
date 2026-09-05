@@ -1531,15 +1531,16 @@ const rootApp = createApp({
 
         <template v-else>
           <div class="metrics">
-            <div class="metric">
+            <div class="metric" :title="!diffMode ? '#applications in subtree / Total #applications' : null">
               <div class="metric-value"><span v-if="!diffMode">{{ selectedApps }} / </span>{{ totalApps }}</div>
               <div class="metric-label">Applications</div>
             </div>
-            <div class="metric">
+            <div class="metric" :title="!diffMode ? '#resources in subtree / Total #resources' : null">
               <div class="metric-value"><span v-if="!diffMode">{{ selectedResources }} / </span>{{ totalResources }}</div>
               <div class="metric-label">Resources</div>
             </div>
-            <div class="metric" :class="{'has-errors': totalErrors > 0}">
+            <div class="metric" :class="{'has-errors': totalErrors > 0}"
+                 :title="!diffMode ? '#errors in subtree / Total #errors' : null">
               <div class="metric-value"><span v-if="!diffMode">{{ selectedErrors }} / </span>{{ totalErrors }}</div>
               <div class="metric-label">Errors</div>
             </div>
