@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - The Diff and Environment map section headings had a different text style (case, letter spacing) from the other sidebar sections. They now match.
+- Diff mode ignored each app's own Application resource, and compared only the resources it renders. Two apps with an identical rendered ConfigMap, say, but a different `targetRevision` or Helm value in their own Application spec, showed as "Identical". Diff mode now also compares each app's Application resource, so a change there always shows up.
 
 ## [0.1.0] - 2026-08-31
 

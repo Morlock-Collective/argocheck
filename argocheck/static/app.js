@@ -187,6 +187,30 @@ function diffResources(manifestsA, manifestsB) {
   return out;
 }
 
+// Diff one matched pair's own Application resource (its definition — repoURL,
+// targetRevision, helm values, etc.), as opposed to the resources it renders.
+// Without this, two apps whose only difference is in the Application spec
+// itself (e.g. two environment-map leaves with different --set values that
+// happen to render identical child resources) would incorrectly show as
+// "Identical", even though the Application YAML toggle correctly shows them
+// as different.
+function diffAppManifest(name, manifestA, manifestB) {
+  if (!manifestA && !manifestB) return null;
+  let status, yamlA = null, yamlB = null;
+  if (manifestA && manifestB) {
+    yamlA = dumpYaml(manifestA);
+    yamlB = dumpYaml(manifestB);
+    status = yamlA === yamlB ? "identical" : "changed";
+  } else if (manifestA) {
+    yamlA = dumpYaml(manifestA);
+    status = "removed";
+  } else {
+    yamlB = dumpYaml(manifestB);
+    status = "added";
+  }
+  return { key: `Application/${name}`, kind: "Application", name, status, yamlA, yamlB };
+}
+
 // Diff two subtrees: match apps by relative path under each root, then diff
 // each matched pair's resources.
 function diffTrees(flat, entryA, entryB) {
@@ -198,6 +222,8 @@ function diffTrees(flat, entryA, entryB) {
     const eA = mapA.get(relPath), eB = mapB.get(relPath);
     if (eA && eB) {
       const resources = diffResources(eA.node.manifests, eB.node.manifests);
+      const appDiff = diffAppManifest(eA.node.name ?? eB.node.name, eA.node.appManifest, eB.node.appManifest);
+      if (appDiff) resources.unshift(appDiff);
       const changed = resources.some((r) => r.status !== "identical");
       apps.push({ relPath, status: changed ? "changed" : "identical", resources });
     } else if (eA) {
