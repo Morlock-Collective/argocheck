@@ -1037,14 +1037,14 @@ const rootApp = createApp({
     async function createMap() {
       envMapMessage.value = null;
       if (envMapMode.value === "none") {
-        envMapMessage.value = { kind: "warning", text: "Select “File path” or “Paste YAML” first." };
+        envMapMessage.value = { kind: "warning", text: "Select “File path” or ”YAML” first." };
         return;
       }
       const hasInput = envMapMode.value === "path" ? envMapPath.value.trim() : envMapYaml.value.trim();
       if (!hasInput) {
         envMapMessage.value = {
           kind: "warning",
-          text: envMapMode.value === "path" ? "Enter a file path first." : "Paste some YAML first.",
+          text: envMapMode.value === "path" ? "Enter a file path first." : "No environment mapping is specified.",
         };
         return;
       }
@@ -1205,7 +1205,7 @@ const rootApp = createApp({
         <!-- Environment map (optional multi-environment fan-out add-on) -->
         <div class="sidebar-section">
           <button class="section-header" @click="sections.envMap = !sections.envMap">
-            Environment map (optional)
+            Environment map
             <i class="section-chevron" :class="{open: sections.envMap}">›</i>
           </button>
           <div v-if="sections.envMap" class="section-body">
