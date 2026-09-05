@@ -294,7 +294,7 @@ environments instead of a single root application.
 
 An **Environment map (optional)** section in the sidebar adds the rest:
 
-- Attach a value-tree file as a file path or pasted YAML.
+- Attach a value-tree file as a file path or inline YAML.
 - Click **Create map**, directly below those inputs, to enumerate the leaves.
   This never calls `helm template`, so it's instant. A checkbox tree appears
   in the same section — a parent checkbox selects or deselects every leaf

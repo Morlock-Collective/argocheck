@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Removed the environment map's "None" radio option. The header checkbox already turns it on and off.
 - Renamed the diff status "Changed" to "Differs". Diff mode compares two branches of the same render, not a change from a prior state.
 - The Applications/Resources/Errors counts in the main view now show the selected app's own subtree next to the grand total (e.g. "3 / 6 Applications"), outside diff mode.
+- The manifest file/chart directory field now shows its full path as a tooltip on hover.
+- Renamed the environment map's "Paste YAML" option to "YAML". You can also write it there directly, not just paste it.
+- The environment map's sidebar section now opens automatically when you turn it on with no file path or YAML given yet. This matches Diff mode's behavior.
+- Added a favicon: a ship's wheel, matching the sidebar logo.
 
 ### Fixed
 - Diff mode ignored each app's own Application resource, and compared only the resources it renders. Two apps with an identical rendered ConfigMap, say, but a different `targetRevision` or Helm value in their own Application spec, showed as "Identical". Diff mode now also compares each app's Application resource, so a change there always shows up.

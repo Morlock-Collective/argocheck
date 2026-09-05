@@ -817,6 +817,13 @@ const rootApp = createApp({
       if (on && (!diffA.value || !diffB.value)) sections.value.diff = true;
     });
 
+    // Same idea for the environment map: activating it with nothing
+    // specified yet opens the section so the file-path/YAML inputs are
+    // immediately visible, instead of leaving the user to find them.
+    watch(envMapEnabled, (on) => {
+      if (on && !envMapPath.value.trim() && !envMapYaml.value.trim()) sections.value.envMap = true;
+    });
+
     // ── Display controls
     const displayMode = ref(localStorage.getItem("displayMode") || "tabs");
     const expandSeq   = ref(0);
@@ -1203,6 +1210,7 @@ const rootApp = createApp({
           <label class="path-label">Root Application manifest or chart directory</label>
           <input class="path-input" v-model="rootPath"
                  placeholder="/path/to/root-app.yaml or chart dir"
+                 :title="rootPath || null"
                  @keyup.enter="renderPrimary()">
         </div>
 
@@ -1279,7 +1287,7 @@ const rootApp = createApp({
                      placeholder="/path/to/value-tree.yaml">
               <div class="option-row">
                 <input type="radio" v-model="envMapMode" value="yaml" id="envmap-yaml">
-                <label for="envmap-yaml">Paste YAML</label>
+                <label for="envmap-yaml">YAML</label>
               </div>
               <textarea v-if="envMapMode === 'yaml'" class="values-textarea" v-model="envMapYaml"
                         rows="8" placeholder="argocheck_root: clusters&#10;argocheck_leaf_depth: 2&#10;..."></textarea>
