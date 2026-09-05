@@ -163,7 +163,14 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
 .browser-divider { height: 1px; background: var(--border); margin: 0.4rem 0; }
 
 /* ── App tree ────────────────────────────────────────────────────────────── */
-.tree-section { flex: 1; min-height: 0; overflow-y: auto; border-top: 1px solid var(--border); padding: 0.5rem 0; }
+/* No flex/min-height/overflow of its own: it's a normal block inside the
+   sidebar's own flex column, so its full content always contributes to
+   .sidebar's total scroll height. An internal scroll region here would
+   compete with .sidebar's outer overflow-y:auto and lose — flexbox shrinks
+   a `flex:1; min-height:0` child toward zero first when its earlier
+   siblings (Recents/Browse/Options/etc., all expanded) already exceed the
+   sidebar's own height, making the app tree unreachable by scrolling. */
+.tree-section { border-top: 1px solid var(--border); padding: 0.5rem 0; }
 .tree-label { padding: 0.4rem 1rem; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .tree-item {
   display: flex;

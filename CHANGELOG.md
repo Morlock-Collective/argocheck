@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - Diff mode ignored each app's own Application resource, and compared only the resources it renders. Two apps with an identical rendered ConfigMap, say, but a different `targetRevision` or Helm value in their own Application spec, showed as "Identical". Diff mode now also compares each app's Application resource, so a change there always shows up.
+- On a short browser window, with several sidebar sections expanded, the application tree could shrink to a sliver. It never became reachable, even by scrolling. The tree now always takes its full natural height, so the sidebar's own scrollbar always reaches it.
 
 ## [0.1.0] - 2026-08-31
 
