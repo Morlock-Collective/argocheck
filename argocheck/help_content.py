@@ -53,22 +53,26 @@ HELP_TOPICS: list[dict[str, Any]] = [
         "title": "Options",
         "blocks": [
             {"type": "p", "text":
-                "The CLI flags and the web interface's sidebar controls set "
-                "the same underlying behavior."},
-            {"type": "h", "text": "CLI"},
+                "These settings apply to every render, on both the CLI and "
+                "the web interface's Options section:"},
             {"type": "list", "items": [
-                "--expand APP_NAME — inline-expand all rendered manifests for the named app in the tree. Repeatable.",
-                "--show APP_NAME — print the full YAML of every manifest rendered by the named app, instead of the tree.",
-                "--argocd-env — inject dummy ARGOCD_APP_* values into every helm template call.",
-                "--max-depth N — maximum recursion depth (default: 10).",
-                "--env-map PATH — attach an environment map to fan the root app out across many environments. See the Environment maps topic.",
-                "--select PATH — with --env-map, render only the leaves under this path. Repeatable.",
+                "Inject ARGOCD_APP_* dummy values — makes charts that "
+                "reference ArgoCD's build environment variables (repoURL, "
+                "targetRevision, and so on) render the way ArgoCD would "
+                "render them. CLI: --argocd-env.",
+                "Max recursion depth — how many levels of child Application "
+                "to follow before stopping. Default: 10. CLI: --max-depth N.",
+                "Values override — extra Helm values (YAML), used only "
+                "when the root is a bare chart directory rather than an "
+                "Application manifest. Web interface only.",
             ]},
-            {"type": "h", "text": "Web interface"},
+            {"type": "p", "text":
+                "Two CLI-only flags change how the result displays, with no "
+                "direct web-interface equivalent — the tree and detail "
+                "panel serve the same purpose there:"},
             {"type": "list", "items": [
-                "Options section — the argocd-env toggle, max recursion depth, and a values override (inline YAML, for chart-directory roots only).",
-                "Environment map section — attach a value-tree file (path or inline YAML) to fan the root out. See the Environment maps topic.",
-                "Diff section — compare two apps in the rendered tree. See the Diff mode topic.",
+                "--expand APP_NAME — inline-expand a named app's manifests in the tree view. Repeatable.",
+                "--show APP_NAME — print that app's manifests instead of the tree.",
             ]},
         ],
     },
