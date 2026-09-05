@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.0] - 2026-09-05
 
 ### Added
 - New feature that makes it easy to generate per-environment root application instances - for easy validation and diffing.
@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - Diff mode ignored each app's own Application resource, and compared only the resources it renders. Two apps with an identical rendered ConfigMap, say, but a different `targetRevision` or Helm value in their own Application spec, showed as "Identical". Diff mode now also compares each app's Application resource, so a change there always shows up.
-- On a short browser window, with several sidebar sections expanded, the application tree could shrink to a sliver. It never became reachable, even by scrolling. The tree now always takes its full natural height, so the sidebar's own scrollbar always reaches it.
+- On a short browser window, with several sidebar sections expanded, the application tree could become unreachable, even by scrolling.
 
 ## [0.1.0] - 2026-08-31
 
