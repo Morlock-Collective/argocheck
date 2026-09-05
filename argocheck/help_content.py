@@ -66,14 +66,6 @@ HELP_TOPICS: list[dict[str, Any]] = [
                 "when the root is a bare chart directory rather than an "
                 "Application manifest. Web interface only.",
             ]},
-            {"type": "p", "text":
-                "Two CLI-only flags change how the result displays, with no "
-                "direct web-interface equivalent — the tree and detail "
-                "panel serve the same purpose there:"},
-            {"type": "list", "items": [
-                "--expand APP_NAME — inline-expand a named app's manifests in the tree view. Repeatable.",
-                "--show APP_NAME — print that app's manifests instead of the tree.",
-            ]},
         ],
     },
     {
