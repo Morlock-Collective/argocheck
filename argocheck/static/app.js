@@ -859,7 +859,13 @@ const rootApp = createApp({
     const helpOpen    = ref(false);
     const helpActive  = ref(null);
     async function openHelp(topicId) {
-      if (!helpTopics.value.length) helpTopics.value = (await api("GET", "/api/help")).topics;
+      if (!helpTopics.value.length) {
+        // Never leave helpTopics as anything but an array, even if the
+        // request fails — a bad response here must not wedge future clicks
+        // into re-throwing on `.length` before they can retry the fetch.
+        const result = await api("GET", "/api/help").catch(() => null);
+        helpTopics.value = result?.topics ?? [];
+      }
       helpActive.value = topicId;
       helpOpen.value = true;
     }
