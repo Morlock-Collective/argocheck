@@ -743,6 +743,16 @@ const rootApp = createApp({
     const isCreatingMap = ref(false);
     const envMapMessage = ref(null);  // { kind: "warning"|"error", text } shown under Create map
 
+    // Section-header checkbox: on/off view of envMapMode. Remembers the last
+    // non-"none" mode so toggling off then back on restores it, instead of
+    // always resetting to "path".
+    const envMapLastActiveMode = ref("path");
+    watch(envMapMode, (v) => { if (v !== "none") envMapLastActiveMode.value = v; });
+    const envMapEnabled = computed({
+      get: () => envMapMode.value !== "none",
+      set: (v) => { envMapMode.value = v ? envMapLastActiveMode.value : "none"; },
+    });
+
     const awaitingLeafSelection = ref(false);        // true once a map has been created (leaves enumerated)
     const valueTreeLeaves       = ref([]);            // flat list of "/"-joined leaf paths
     const valueTreeSelected     = ref(new Set());     // leaf paths currently checked
@@ -770,6 +780,14 @@ const rootApp = createApp({
 
     // Sidebar section open/closed
     const sections = ref({ recents: true, browser: false, options: false, display: false, diff: false, envMap: false });
+
+    // Turning diff mode on with no branches picked yet opens the Diff
+    // section so the user immediately sees the Branch A/B pickers. If both
+    // are already picked (e.g. restored from the URL), leave the section's
+    // open/closed state as-is.
+    watch(diffMode, (on) => {
+      if (on && (!diffA.value || !diffB.value)) sections.value.diff = true;
+    });
 
     // ── Display controls
     const displayMode = ref(localStorage.getItem("displayMode") || "tabs");
@@ -1126,7 +1144,7 @@ const rootApp = createApp({
       viewState, staleApp, selectApp, onResourceStateChange, clearNavigation,
       diffMode, diffA, diffB, diffShowIdentical, diffFullContext, diffOptions, diffResult, swapDiffBranches,
       treeItemActions,
-      envMapMode, envMapPath, envMapYaml,
+      envMapMode, envMapPath, envMapYaml, envMapEnabled,
       awaitingLeafSelection, isValueTree, leafTreeFlat, leafTreePrefixes, selectedLeafCount,
       valueTreeLeaves, valueTreeSelected, selectionState, leavesUnder, toggleLeafGroup, selectAllLeaves, selectNoneLeaves,
       primaryButtonLabel, primaryButtonDisabled, renderPrimary, createMap, isCreatingMap, envMapMessage,
@@ -1204,63 +1222,65 @@ const rootApp = createApp({
 
         <!-- Environment map (optional multi-environment fan-out add-on) -->
         <div class="sidebar-section">
-          <button class="section-header" @click="sections.envMap = !sections.envMap">
-            Environment map
-            <i class="section-chevron" :class="{open: sections.envMap}">›</i>
-          </button>
+          <div class="section-header checkable">
+            <input type="checkbox" v-model="envMapEnabled" @click.stop title="Enable environment map">
+            <button class="section-header-toggle" @click="sections.envMap = !sections.envMap">
+              Environment map
+              <i class="section-chevron" :class="{open: sections.envMap}">›</i>
+            </button>
+          </div>
           <div v-if="sections.envMap" class="section-body">
             <p class="hint-text">Fan the app above out across a nested value map
                (e.g. cluster → namespace) instead of rendering it once. See
                README § Value trees.</p>
-            <div class="option-row">
-              <input type="radio" v-model="envMapMode" value="none" id="envmap-none">
-              <label for="envmap-none">None</label>
-            </div>
-            <div class="option-row">
-              <input type="radio" v-model="envMapMode" value="path" id="envmap-path">
-              <label for="envmap-path">File path</label>
-            </div>
-            <input v-if="envMapMode === 'path'" class="path-input" v-model="envMapPath"
-                   placeholder="/path/to/value-tree.yaml">
-            <div class="option-row">
-              <input type="radio" v-model="envMapMode" value="yaml" id="envmap-yaml">
-              <label for="envmap-yaml">Paste YAML</label>
-            </div>
-            <textarea v-if="envMapMode === 'yaml'" class="values-textarea" v-model="envMapYaml"
-                      rows="8" placeholder="argocheck_root: clusters&#10;argocheck_leaf_depth: 2&#10;..."></textarea>
-
-            <!-- Create map: dedicated action, directly under the spec inputs.
-                 Never triggered by Render; missing/invalid input just shows
-                 a message here rather than doing nothing silently. -->
-            <button class="btn" style="width:100%;justify-content:center;margin-top:0.5rem"
-                    @click="createMap()" :disabled="isBusy">
-              {{ isCreatingMap ? "Creating…" : "Create map" }}
-            </button>
-            <div v-if="envMapMessage" class="inline-message" :class="envMapMessage.kind">
-              {{ envMapMessage.text }}
-            </div>
-
-            <!-- Leaf checkboxes, shown once the map has been created -->
-            <template v-if="isValueTree">
-              <div class="divider"></div>
-              <p class="hint-text">Environments ({{ selectedLeafCount }}/{{ leafTreeFlat.filter(e => e.isLeaf).length }})</p>
+            <template v-if="envMapEnabled">
               <div class="option-row">
-                <button class="btn btn-sm" style="flex:1;justify-content:center" @click="selectAllLeaves()">Select all</button>
-                <button class="btn btn-sm" style="flex:1;justify-content:center" @click="selectNoneLeaves()">Select none</button>
+                <input type="radio" v-model="envMapMode" value="path" id="envmap-path">
+                <label for="envmap-path">File path</label>
               </div>
-              <div class="tree-section">
-                <div v-for="({depth, path, pathKey, isLeaf}, i) in leafTreeFlat" :key="pathKey" class="tree-row">
-                  <label class="tree-item leaf-checkbox-row">
-                    <span class="tree-prefix">{{ leafTreePrefixes[i] }}</span>
-                    <input type="checkbox"
-                           :checked="selectionState(valueTreeLeaves, valueTreeSelected, pathKey) === 'all'"
-                           v-indeterminate="selectionState(valueTreeLeaves, valueTreeSelected, pathKey) === 'some'"
-                           @change="toggleLeafGroup(pathKey)">
-                    <span class="tree-name">{{ path[path.length - 1] }}</span>
-                  </label>
+              <input v-if="envMapMode === 'path'" class="path-input" v-model="envMapPath"
+                     placeholder="/path/to/value-tree.yaml">
+              <div class="option-row">
+                <input type="radio" v-model="envMapMode" value="yaml" id="envmap-yaml">
+                <label for="envmap-yaml">Paste YAML</label>
+              </div>
+              <textarea v-if="envMapMode === 'yaml'" class="values-textarea" v-model="envMapYaml"
+                        rows="8" placeholder="argocheck_root: clusters&#10;argocheck_leaf_depth: 2&#10;..."></textarea>
+
+              <!-- Create map: dedicated action, directly under the spec inputs.
+                   Never triggered by Render; missing/invalid input just shows
+                   a message here rather than doing nothing silently. -->
+              <button class="btn" style="width:100%;justify-content:center;margin-top:0.5rem"
+                      @click="createMap()" :disabled="isBusy">
+                {{ isCreatingMap ? "Creating…" : "Create map" }}
+              </button>
+              <div v-if="envMapMessage" class="inline-message" :class="envMapMessage.kind">
+                {{ envMapMessage.text }}
+              </div>
+
+              <!-- Leaf checkboxes, shown once the map has been created -->
+              <template v-if="isValueTree">
+                <div class="divider"></div>
+                <p class="hint-text">Environments ({{ selectedLeafCount }}/{{ leafTreeFlat.filter(e => e.isLeaf).length }})</p>
+                <div class="option-row">
+                  <button class="btn btn-sm" style="flex:1;justify-content:center" @click="selectAllLeaves()">Select all</button>
+                  <button class="btn btn-sm" style="flex:1;justify-content:center" @click="selectNoneLeaves()">Select none</button>
                 </div>
-              </div>
+                <div class="tree-section">
+                  <div v-for="({depth, path, pathKey, isLeaf}, i) in leafTreeFlat" :key="pathKey" class="tree-row">
+                    <label class="tree-item leaf-checkbox-row">
+                      <span class="tree-prefix">{{ leafTreePrefixes[i] }}</span>
+                      <input type="checkbox"
+                             :checked="selectionState(valueTreeLeaves, valueTreeSelected, pathKey) === 'all'"
+                             v-indeterminate="selectionState(valueTreeLeaves, valueTreeSelected, pathKey) === 'some'"
+                             @change="toggleLeafGroup(pathKey)">
+                      <span class="tree-name">{{ path[path.length - 1] }}</span>
+                    </label>
+                  </div>
+                </div>
+              </template>
             </template>
+            <p v-else class="hint-text">Check the box above to enable an environment map.</p>
           </div>
         </div>
 
@@ -1297,15 +1317,14 @@ const rootApp = createApp({
 
         <!-- Diff mode (shown after a render) -->
         <div class="sidebar-section" v-if="renderResult">
-          <button class="section-header" @click="sections.diff = !sections.diff">
-            Diff
-            <i class="section-chevron" :class="{open: sections.diff}">›</i>
-          </button>
+          <div class="section-header checkable">
+            <input type="checkbox" v-model="diffMode" @click.stop title="Compare two branches">
+            <button class="section-header-toggle" @click="sections.diff = !sections.diff">
+              Diff
+              <i class="section-chevron" :class="{open: sections.diff}">›</i>
+            </button>
+          </div>
           <div v-if="sections.diff" class="section-body">
-            <div class="option-row">
-              <input type="checkbox" v-model="diffMode" id="opt-diff-mode">
-              <label for="opt-diff-mode">Compare two branches</label>
-            </div>
             <template v-if="diffMode">
               <div class="option-row option-col">
                 <label for="opt-diff-a">Branch A</label>
@@ -1339,6 +1358,7 @@ const rootApp = createApp({
                 </div>
               </div>
             </template>
+            <p v-else class="hint-text">Check the box above to compare two applications side-by-side.</p>
           </div>
         </div>
 
@@ -1406,6 +1426,10 @@ const rootApp = createApp({
             </div>
           </div>
           <template v-if="diffMode">
+            <div class="diff-mode-banner">
+              <span>⇄ Diff mode active</span>
+              <button class="btn btn-sm" @click="diffMode = false">Turn off</button>
+            </div>
             <div class="divider"></div>
             <div v-if="!diffA || !diffB" class="diff-collapsed">
               Select two applications in the Diff section of the sidebar to compare.

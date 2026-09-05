@@ -85,6 +85,20 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
 .section-chevron { transition: transform 0.15s; font-style: normal; }
 .section-chevron.open { transform: rotate(90deg); }
 
+/* A section-header that also carries an enable/disable checkbox (Diff,
+   Environment map): the checkbox toggles the mode without opening the
+   section, the rest of the row still opens/closes it. */
+.section-header.checkable { justify-content: flex-start; gap: 0.6rem; cursor: default; }
+.section-header.checkable input[type=checkbox] {
+  accent-color: var(--primary); width: 1rem; height: 1rem; flex-shrink: 0; cursor: pointer;
+}
+.section-header-toggle {
+  display: flex; align-items: center; justify-content: space-between; flex: 1;
+  cursor: pointer; user-select: none; background: none; border: none;
+  font: inherit; color: inherit; text-align: left; padding: 0;
+  text-transform: inherit; letter-spacing: inherit;
+}
+
 .section-body { padding: 0.5rem 1rem 0.75rem; }
 
 /* Path input */
@@ -257,6 +271,13 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
   background: var(--warning-dim); border: 1px solid var(--warning); border-radius: var(--radius);
   padding: 0.6rem 1rem; color: var(--warning); margin-bottom: 1rem; font-size: 0.85rem;
 }
+
+.diff-mode-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  background: var(--primary-dim); border: 1px solid var(--primary); border-radius: var(--radius);
+  padding: 0.6rem 1rem; color: var(--primary); margin-bottom: 1rem; font-size: 0.85rem; font-weight: 600;
+}
+.diff-mode-banner .btn { font-weight: 400; }
 
 /* ── Metrics ─────────────────────────────────────────────────────────────── */
 .metrics { display: flex; gap: 1rem; margin-bottom: 1.25rem; }
