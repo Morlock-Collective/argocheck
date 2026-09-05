@@ -461,9 +461,16 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
   flex-shrink: 0;
   display: flex; align-items: center;
   border-bottom: 1px solid var(--border);
-  padding: 0.4rem 0.5rem;
+  padding: 0.4rem 0.5rem 0.4rem 0.9rem;
   gap: 0.25rem;
 }
+.help-modal-title {
+  font-weight: 700; font-size: 0.85rem;
+  color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+.help-modal-sep { width: 1px; height: 1.3rem; background: var(--border); flex-shrink: 0; margin: 0 0.5rem; }
 .help-tab {
   background: none; border: none; cursor: pointer;
   padding: 0.4rem 0.75rem;

@@ -711,6 +711,8 @@ const HelpModal = {
     <div class="help-overlay" @click.self="$emit('close')">
       <div class="help-modal">
         <div class="help-modal-tabs">
+          <span class="help-modal-title">Guide</span>
+          <span class="help-modal-sep"></span>
           <button v-for="t in topics" :key="t.id" class="help-tab"
                   :class="{active: activeTopic && t.id === activeTopic.id}"
                   @click="$emit('select', t.id)">{{ t.title }}</button>
