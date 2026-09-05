@@ -7,12 +7,29 @@ from pathlib import Path
 
 import click
 
-from .display import print_error, render_app_yaml, render_tree
+from .display import print_error, render_app_yaml, render_guide, render_tree
+from .help_content import HELP_TOPICS
 from .helm import HelmError, check_helm
 from .models import AppNode
 from .parser import ParseError, load_yaml_file, parse_application
 from .valuetree import ValueTreeError, build_leaf_node, matches_selection, parse_leaves
 from .walker import walk
+
+_GUIDE_TOPIC_IDS = [t["id"] for t in HELP_TOPICS]
+
+
+def _print_guide_and_exit(ctx: click.Context, param: click.Parameter, value: bool) -> None:
+    if not value or ctx.resilient_parsing:
+        return
+    render_guide(HELP_TOPICS)
+    ctx.exit()
+
+
+def _print_guide_topic_and_exit(ctx: click.Context, param: click.Parameter, value: str | None) -> None:
+    if value is None or ctx.resilient_parsing:
+        return
+    render_guide(HELP_TOPICS, topic_id=value)
+    ctx.exit()
 
 
 @click.command()
@@ -59,6 +76,24 @@ from .walker import walk
     help="Only with --env-map: render only leaves under this path "
          "(e.g. --select clustername1 or --select clustername1/namespace1). "
          "Repeatable. Defaults to every leaf.",
+)
+@click.option(
+    "--guide",
+    is_flag=True,
+    default=False,
+    is_eager=True,
+    expose_value=False,
+    callback=_print_guide_and_exit,
+    help="Print the built-in guide (all topics) and exit.",
+)
+@click.option(
+    "--guide-topic",
+    type=click.Choice(_GUIDE_TOPIC_IDS),
+    default=None,
+    is_eager=True,
+    expose_value=False,
+    callback=_print_guide_topic_and_exit,
+    help="Print one topic from the built-in guide and exit.",
 )
 @click.version_option(package_name="argocheck")
 def main(

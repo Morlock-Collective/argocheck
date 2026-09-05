@@ -77,6 +77,9 @@ The interface provides:
 - **Error display** — the failing helm command and wrapped stderr output
 - **Diff mode** — structural comparison between any two apps in the rendered
   tree (see below)
+- **Built-in guide** — click a "?" button next to the sidebar logo, Options,
+  Environment map, or Diff section for an in-context explanation of that
+  topic
 
 #### Diff mode
 
@@ -127,6 +130,8 @@ manifest.
 | `--show APP_NAME` | Print the full YAML of every manifest rendered by the named app instead of the tree. |
 | `--argocd-env` | Inject dummy `ARGOCD_APP_*` values into every `helm template` call. |
 | `--max-depth N` | Maximum recursion depth (default: 10). |
+| `--guide` | Print the built-in guide (all topics) and exit. |
+| `--guide-topic TOPIC` | Print one topic from the built-in guide (`basics`, `options`, `environment-map`, or `diffing`) and exit. |
 | `--version` | Print version and exit. |
 
 ### Examples

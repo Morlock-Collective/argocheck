@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from argocheck import recents as _recents
+from argocheck.help_content import HELP_TOPICS
 from argocheck.helm import HelmError, check_helm
 from argocheck.models import AppNode, HelmSource
 from argocheck.parser import ParseError, load_yaml_file, parse_application
@@ -228,6 +229,11 @@ def api_recents() -> list[str]:
 def api_delete_recent(path: str = Query(...)) -> dict[str, bool]:
     _recents.remove(path)
     return {"ok": True}
+
+
+@app.get("/api/help")
+def api_help() -> dict[str, Any]:
+    return {"topics": HELP_TOPICS}
 
 
 @app.get("/api/browse")

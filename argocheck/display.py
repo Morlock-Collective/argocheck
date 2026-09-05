@@ -7,6 +7,7 @@ from typing import Any
 import yaml
 from rich.console import Console
 from rich.panel import Panel
+from rich.rule import Rule
 from rich.syntax import Syntax
 from rich.text import Text
 from rich.tree import Tree
@@ -111,3 +112,37 @@ def render_app_yaml(node: AppNode, app_name: str) -> bool:
 
 def print_error(message: str) -> None:
     console.print(f"[bold red]Error:[/bold red] {message}")
+
+
+def _render_help_block(block: dict[str, Any]) -> None:
+    kind = block["type"]
+    if kind == "p":
+        console.print(block["text"])
+        console.print()
+    elif kind == "h":
+        console.print(Text(block["text"], style="bold underline"))
+        console.print()
+    elif kind == "list":
+        for item in block["items"]:
+            console.print(Text("• ", style="dim") + Text(item))
+        console.print()
+    elif kind == "code":
+        console.print(Syntax(block["text"].rstrip("\n"), block.get("lang", "text"), theme="monokai"))
+        console.print()
+
+
+def render_guide(topics: list[dict[str, Any]], topic_id: str | None = None) -> bool:
+    """Print the built-in guide. Returns False if topic_id was given but not found."""
+    if topic_id is not None:
+        topics = [t for t in topics if t["id"] == topic_id]
+        if not topics:
+            return False
+
+    for i, topic in enumerate(topics):
+        if i > 0:
+            console.print()
+        console.print(Rule(f"[bold]{topic['title']}[/bold]"))
+        console.print()
+        for block in topic["blocks"]:
+            _render_help_block(block)
+    return True

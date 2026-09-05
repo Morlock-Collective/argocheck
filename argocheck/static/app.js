@@ -686,6 +686,51 @@ const ContextMenu = {
   `
 };
 
+// ── HelpModal component ───────────────────────────────────────────────────
+//
+// Renders the structured help content served by /api/help — the same
+// {id, title, blocks} shape the CLI's `--guide` renders with rich. Each
+// block is one of p/h/list/code; code blocks reuse the bundled highlighter.
+
+const HelpModal = {
+  props: {
+    topics:   { type: Array,  required: true },
+    activeId: { type: String, default: null },
+  },
+  emits: ["close", "select"],
+  setup(props) {
+    const activeTopic = computed(() =>
+      props.topics.find((t) => t.id === props.activeId) ?? props.topics[0] ?? null
+    );
+    function codeHtml(block) {
+      return hljs.highlight(block.text, { language: block.lang || "plaintext" }).value;
+    }
+    return { activeTopic, codeHtml };
+  },
+  template: `
+    <div class="help-overlay" @click.self="$emit('close')">
+      <div class="help-modal">
+        <div class="help-modal-tabs">
+          <button v-for="t in topics" :key="t.id" class="help-tab"
+                  :class="{active: activeTopic && t.id === activeTopic.id}"
+                  @click="$emit('select', t.id)">{{ t.title }}</button>
+          <button class="btn-icon help-close" @click="$emit('close')" title="Close">✕</button>
+        </div>
+        <div class="help-modal-body" v-if="activeTopic">
+          <template v-for="(block, i) in activeTopic.blocks" :key="i">
+            <p v-if="block.type === 'p'" class="help-p">{{ block.text }}</p>
+            <h3 v-else-if="block.type === 'h'" class="help-h">{{ block.text }}</h3>
+            <ul v-else-if="block.type === 'list'" class="help-list">
+              <li v-for="(item, j) in block.items" :key="j">{{ item }}</li>
+            </ul>
+            <pre v-else-if="block.type === 'code'" class="hljs help-code"><code v-html="codeHtml(block)"></code></pre>
+          </template>
+        </div>
+      </div>
+    </div>
+  `
+};
+
 // ── FileBrowser component ─────────────────────────────────────────────────
 
 const FileBrowser = {
@@ -746,7 +791,7 @@ const FileBrowser = {
 // ── Root App ──────────────────────────────────────────────────────────────
 
 const rootApp = createApp({
-  components: { FileBrowser, AppDetail, DiffViewer, ContextMenu },
+  components: { FileBrowser, AppDetail, DiffViewer, ContextMenu, HelpModal },
 
   setup() {
     // ── State
@@ -808,6 +853,20 @@ const rootApp = createApp({
 
     // Sidebar section open/closed
     const sections = ref({ recents: true, browser: false, options: false, display: false, diff: false, envMap: false });
+
+    // ── Help modal
+    const helpTopics  = ref([]);
+    const helpOpen    = ref(false);
+    const helpActive  = ref(null);
+    async function openHelp(topicId) {
+      if (!helpTopics.value.length) helpTopics.value = (await api("GET", "/api/help")).topics;
+      helpActive.value = topicId;
+      helpOpen.value = true;
+    }
+    function closeHelp() { helpOpen.value = false; }
+    function onHelpKeydown(e) { if (e.key === "Escape" && helpOpen.value) closeHelp(); }
+    onMounted(() => document.addEventListener("keydown", onHelpKeydown));
+    onUnmounted(() => document.removeEventListener("keydown", onHelpKeydown));
 
     // Turning diff mode on with no branches picked yet opens the Diff
     // section so the user immediately sees the Branch A/B pickers. If both
@@ -1192,6 +1251,7 @@ const rootApp = createApp({
       awaitingLeafSelection, isValueTree, leafTreeFlat, leafTreePrefixes, selectedLeafCount,
       valueTreeLeaves, valueTreeSelected, selectionState, leavesUnder, toggleLeafGroup, selectAllLeaves, selectNoneLeaves,
       primaryButtonLabel, primaryButtonDisabled, renderPrimary, createMap, isCreatingMap, envMapMessage,
+      helpTopics, helpOpen, helpActive, openHelp, closeHelp,
     };
   },
 
@@ -1203,6 +1263,7 @@ const rootApp = createApp({
         <div class="sidebar-header">
           <span class="logo-icon">⎈</span>
           <span class="logo">argocheck</span>
+          <button class="help-trigger" @click="openHelp('basics')" title="Help: Basics">?</button>
         </div>
 
         <!-- Path input -->
@@ -1244,10 +1305,13 @@ const rootApp = createApp({
 
         <!-- Options -->
         <div class="sidebar-section">
-          <button class="section-header" @click="sections.options = !sections.options">
-            Options
-            <i class="section-chevron" :class="{open: sections.options}">›</i>
-          </button>
+          <div class="section-header with-help">
+            <button class="section-header-toggle" @click="sections.options = !sections.options">
+              Options
+              <i class="section-chevron" :class="{open: sections.options}">›</i>
+            </button>
+            <button class="help-trigger" @click.stop="openHelp('options')" title="Help: Options">?</button>
+          </div>
           <div v-if="sections.options" class="section-body">
             <div class="option-row">
               <input type="checkbox" v-model="options.argocdEnv" id="opt-env">
@@ -1273,6 +1337,7 @@ const rootApp = createApp({
               Environment map
               <i class="section-chevron" :class="{open: sections.envMap}">›</i>
             </button>
+            <button class="help-trigger" @click.stop="openHelp('environment-map')" title="Help: Environment maps">?</button>
           </div>
           <div v-if="sections.envMap" class="section-body">
             <p class="hint-text">Fan the app above out across a nested value map
@@ -1368,6 +1433,7 @@ const rootApp = createApp({
               Diff
               <i class="section-chevron" :class="{open: sections.diff}">›</i>
             </button>
+            <button class="help-trigger" @click.stop="openHelp('diffing')" title="Help: Diff mode">?</button>
           </div>
           <div v-if="sections.diff" class="section-body">
             <template v-if="diffMode">
@@ -1505,6 +1571,9 @@ const rootApp = createApp({
         </template>
 
       </main>
+
+      <help-modal v-if="helpOpen" :topics="helpTopics" :active-id="helpActive"
+                  @close="closeHelp" @select="helpActive = $event"></help-modal>
     </div>
   `
 });
