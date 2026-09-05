@@ -1,0 +1,16 @@
+argocheck_root: clusters
+argocheck_leaf_depth: 2
+argocheck_variable_mappings:
+  - ""
+  - "cluster"
+  - "namespace"
+
+clusters:
+  prod:
+    ns-a:
+      replicaCount: "3"
+    ns-b:
+      replicaCount: "5"
+  qa:
+    ns-a:
+      replicaCount: "1"

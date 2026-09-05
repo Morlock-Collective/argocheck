@@ -10,6 +10,11 @@ class HelmParameter:
     name: str
     value: str
     force_string: bool = False
+    # True => value is a JSON-encoded string, applied via `helm --set-json`
+    # instead of `--set`/`--set-string`. Lets a parameter carry an arbitrary
+    # YAML-native structure (list, nested mapping) or a correctly-typed
+    # scalar (bool/null), which plain --set's string-only syntax can't.
+    is_json: bool = False
 
 
 @dataclass

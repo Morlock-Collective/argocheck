@@ -1,0 +1,51 @@
+name: Update dependencies
+
+on:
+  schedule:
+    - cron: "0 5 * * 4" # every Thursday at 05:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - uses: azure/setup-helm@v5
+        with:
+          version: latest
+
+      - name: Bump pinned dependencies to latest PyPI releases
+        run: python scripts/bump_dependencies.py
+
+      - name: Install argocheck with dev dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run tests
+        run: pytest -v
+
+      - name: Open PR with the update
+        if: success()
+        uses: peter-evans/create-pull-request@v8
+        with:
+          commit-message: "Bump pinned dependencies to latest releases"
+          title: "Bump pinned dependencies to latest releases"
+          body: |
+            Automated dependency update: pins in `pyproject.toml` bumped to
+            each package's latest PyPI release, and the full test suite
+            passed (the same way CI runs it, `pip install -e ".[dev]"`)
+            before this PR was opened.
+
+            Review the diff before merging — passing tests isn't proof
+            against everything (e.g. a compromised or misbehaving release).
+          branch: deps/auto-update
+          delete-branch: true
+          labels: dependencies

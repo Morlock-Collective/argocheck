@@ -24,12 +24,12 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-    "click>=8.1",
-    "rich>=13.0",
-    "pyyaml>=6.0",
-    "pydantic>=2.0",
-    "fastapi>=0.110",
-    "uvicorn>=0.27",
+    "click==8.5.0",
+    "rich==15.0.0",
+    "pyyaml==6.0.3",
+    "pydantic==2.13.5",
+    "fastapi==0.141.1",
+    "uvicorn==0.52.4",
 ]
 
 [project.urls]
@@ -40,8 +40,8 @@ Changelog = "https://github.com/Morlock-Collective/argocheck/blob/main/CHANGELOG
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0",
-    "pytest-mock>=3.12",
+    "pytest==9.1.1",
+    "pytest-mock==3.15.1",
 ]
 
 [project.scripts]

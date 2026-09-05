@@ -49,7 +49,7 @@ def parse_application(doc: dict[str, Any]) -> AppNode:
         raw_sources = spec["sources"] or []
         if not raw_sources:
             raise ParseError(f"Application {name!r}: spec.sources is empty")
-        sources = [_parse_helm_source(name, s) for s in raw_sources]
+        sources = [parse_helm_source(name, s) for s in raw_sources]
         return AppNode(name=name, namespace=namespace, sources=sources, app_manifest=doc)
 
     # Single source: spec.source
@@ -57,11 +57,11 @@ def parse_application(doc: dict[str, Any]) -> AppNode:
     if not raw_source:
         raise ParseError(f"Application {name!r} has no spec.source or spec.sources")
 
-    source = _parse_helm_source(name, raw_source)
+    source = parse_helm_source(name, raw_source)
     return AppNode(name=name, namespace=namespace, sources=[source], app_manifest=doc)
 
 
-def _parse_helm_source(app_name: str, raw: dict[str, Any]) -> HelmSource:
+def parse_helm_source(app_name: str, raw: dict[str, Any]) -> HelmSource:
     repo_url = raw.get("repoURL") or ""
     if not repo_url:
         raise ParseError(f"Application {app_name!r}: spec.source.repoURL is required")

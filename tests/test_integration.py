@@ -7,6 +7,7 @@ import pytest
 from argocheck.helm import run_template
 from argocheck.models import AppNode, HelmParameter, HelmSource
 from argocheck.parser import load_yaml_file, parse_application
+from argocheck.valuetree import build_leaf_node, parse_leaves
 from argocheck.walker import walk
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -216,3 +217,96 @@ def test_walk_multi_source_three_sources_mixed():
     assert by_kind["Deployment"]["spec"]["replicas"] == 4
     # child-chart does not reference the ref -> keeps its own default (1)
     assert by_kind["ConfigMap"]["data"]["replicaCount"] == "1"
+
+
+def test_value_tree_fans_out_one_chart_across_all_leaves():
+    """An env-map file layered onto a real root app renders one AppNode per
+    leaf, each getting its own tree-derived --set overrides on top of the
+    same shared chart (and the root app's own parameters/values)."""
+    root_doc = load_yaml_file(FIXTURES / "root-app-simple.yaml")
+    root_node = parse_application(root_doc)
+    root_node.sources[0].repo_url = str(FIXTURES / "simple-chart")
+
+    env_doc = load_yaml_file(FIXTURES / "value-tree-clusters.yaml")
+    leaves = parse_leaves(env_doc)
+    leaf_nodes = {leaf.display_path: build_leaf_node(root_node, leaf) for leaf in leaves}
+    assert set(leaf_nodes) == {"prod/ns-a", "prod/ns-b", "qa/ns-a"}
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_dir = Path(tmp)
+        for node in leaf_nodes.values():
+            walk(node, tmp_dir=tmp_dir)
+
+    for path, expected_replicas in [("prod/ns-a", 3), ("prod/ns-b", 5), ("qa/ns-a", 1)]:
+        node = leaf_nodes[path]
+        assert node.error is None
+        assert len(node.manifests) == 1
+        deployment = node.manifests[0]
+        assert deployment["kind"] == "Deployment"
+        assert deployment["spec"]["replicas"] == expected_replicas
+        # The tree label (node.name) differs per leaf, but the underlying
+        # Helm release name — and hence the rendered resource's own name —
+        # must stay whatever the un-fanned root-app-simple.yaml would use
+        # (helm.releaseName: my-release), not the per-leaf tree path.
+        assert deployment["metadata"]["name"] == "my-release-nginx"
+
+
+def test_value_tree_leaves_render_identical_resources_when_tree_values_are_unused():
+    """If the tree's variables/values aren't consumed by the chart at all
+    (e.g. custom variable names the chart doesn't reference), every leaf must
+    render byte-identical resources to a plain single render of the root app —
+    only the argocheck-side tree labels differ, not anything Helm produces."""
+    root_doc = load_yaml_file(FIXTURES / "root-app-simple.yaml")
+    root_node = parse_application(root_doc)
+    root_node.sources[0].repo_url = str(FIXTURES / "simple-chart")
+
+    env_doc = {
+        "argocheck_root": "clusters",
+        "argocheck_leaf_depth": 2,
+        "argocheck_variable_mappings": ["", "cluster2", "namespace3"],
+        "clusters": {
+            "prod": {"ns-a": {}, "ns-b": {}},
+            "qa": {"ns-a": {}},
+        },
+    }
+    leaves = parse_leaves(env_doc)
+    leaf_nodes = [build_leaf_node(root_node, leaf) for leaf in leaves]
+    assert {n.name for n in leaf_nodes} == {
+        "my-app (prod/ns-a)", "my-app (prod/ns-b)", "my-app (qa/ns-a)",
+    }
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_dir = Path(tmp)
+        for node in leaf_nodes:
+            walk(node, tmp_dir=tmp_dir)
+
+    manifests = [n.manifests for n in leaf_nodes]
+    assert all(m == manifests[0] for m in manifests), manifests
+
+
+def test_value_tree_leaf_map_and_list_values_render_correctly():
+    """A leaf value that's a nested mapping (not just a scalar) must reach
+    the chart intact via --set-json, correctly overriding the base chart's
+    own nested `image` value field-by-field."""
+    root_doc = load_yaml_file(FIXTURES / "root-app-simple.yaml")
+    root_node = parse_application(root_doc)
+    root_node.sources[0].repo_url = str(FIXTURES / "simple-chart")
+
+    env_doc = {
+        "argocheck_root": "envs",
+        "argocheck_leaf_depth": 1,
+        "argocheck_variable_mappings": ["", "env"],
+        "envs": {
+            "prod": {"image": {"repository": "custom-repo", "tag": "v2"}},
+        },
+    }
+    leaves = parse_leaves(env_doc)
+    leaf = leaves[0]
+    node = build_leaf_node(root_node, leaf)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        walk(node, tmp_dir=Path(tmp))
+
+    assert node.error is None
+    deployment = node.manifests[0]
+    assert deployment["spec"]["template"]["spec"]["containers"][0]["image"] == "custom-repo:v2"

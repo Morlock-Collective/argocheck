@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- New feature that makes it easy to generate per-environment root application instances - for easy validation and diffing.
+
 ## [0.1.0] - 2026-08-31
 
 Initial release. See the [README](README.md) for full feature documentation.

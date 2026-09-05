@@ -83,9 +83,14 @@ def build_template_cmd(
         tmp_obj.write_text(yaml.dump(source.values_object))
         cmd += ["-f", str(tmp_obj)]
 
-    # Parameters → --set / --set-string
+    # Parameters → --set / --set-string / --set-json
     for param in source.parameters:
-        flag = "--set-string" if param.force_string else "--set"
+        if param.is_json:
+            flag = "--set-json"
+        elif param.force_string:
+            flag = "--set-string"
+        else:
+            flag = "--set"
         cmd += [flag, f"{param.name}={param.value}"]
 
     # Optional ArgoCD build environment dummy values
