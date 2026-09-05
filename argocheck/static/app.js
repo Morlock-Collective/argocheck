@@ -725,7 +725,7 @@ const rootApp = createApp({
     const rootPath    = ref("");
     const recents     = ref([]);
     const isRendering = ref(false);
-    const renderResult = ref(null);   // { ok, tree, error }
+    const renderResult = ref(null);   // { ok, trees, error }
     const topError    = ref(null);
     const selectedApp = ref(null);
     const options     = ref({ argocdEnv: false, maxDepth: 10, valuesOverride: "" });
@@ -740,16 +740,25 @@ const rootApp = createApp({
     const envMapMode = ref("none");   // "none" | "path" | "yaml" — radio button
     const envMapPath = ref("");
     const envMapYaml = ref("");
+    const isCreatingMap = ref(false);
+    const envMapMessage = ref(null);  // { kind: "warning"|"error", text } shown under Create map
 
-    const awaitingLeafSelection = ref(false);        // true between "enumerate" and "render selected"
+    const awaitingLeafSelection = ref(false);        // true once a map has been created (leaves enumerated)
     const valueTreeLeaves       = ref([]);            // flat list of "/"-joined leaf paths
     const valueTreeSelected     = ref(new Set());     // leaf paths currently checked
 
-    watch(envMapMode, () => {
+    function resetLeafSelection() {
       awaitingLeafSelection.value = false;
       valueTreeLeaves.value = [];
       valueTreeSelected.value = new Set();
-    });
+      envMapMessage.value = null;
+    }
+    watch(envMapMode, resetLeafSelection);
+    // Editing the env-map source after creating a map goes back to requiring
+    // an explicit "Create map" click rather than silently rendering a stale
+    // selection against a spec that's since changed.
+    watch(envMapPath, resetLeafSelection);
+    watch(envMapYaml, resetLeafSelection);
 
     // ── Diff mode
     const diffMode          = ref(false);
@@ -760,7 +769,7 @@ const rootApp = createApp({
     const pendingDiff       = ref(null);  // { a, b } pathKeys to apply once the next render completes
 
     // Sidebar section open/closed
-    const sections = ref({ recents: true, browser: false, options: false, display: false, diff: false, leaves: true, envMap: false });
+    const sections = ref({ recents: true, browser: false, options: false, display: false, diff: false, envMap: false });
 
     // ── Display controls
     const displayMode = ref(localStorage.getItem("displayMode") || "tabs");
@@ -794,8 +803,15 @@ const rootApp = createApp({
     }
 
     // ── Derived
+    // renderResult.trees is a list of independent root trees — normally just
+    // one, but a value-tree fan-out produces one per leaf (siblings, not
+    // nested under a shared parent, since a leaf is a full standalone
+    // instance of the base app, not a child of it). Each root's own name is
+    // already unique (derived from its env-map path when fanned out), so
+    // flattening them separately and concatenating produces no pathKey
+    // collisions.
     const flat = computed(() =>
-      renderResult.value?.tree ? flattenTree(renderResult.value.tree) : []
+      (renderResult.value?.trees ?? []).flatMap((t) => flattenTree(t))
     );
     const prefixes = computed(() => computeTreePrefixes(flat.value));
 
@@ -939,8 +955,14 @@ const rootApp = createApp({
       syncUrl();
     }
 
+    const isBusy = computed(() => isRendering.value || isCreatingMap.value);
+
+    // Render always renders: the plain root app if no map has been created
+    // yet (env-map fields are never sent in that case, regardless of what's
+    // configured in the section — Create map is a separate, explicit step),
+    // or the checked subset of a created map's leaves once one exists.
     async function doRender(selectedLeaves) {
-      if (!rootPath.value.trim() || isRendering.value) return;
+      if (!rootPath.value.trim() || isBusy.value) return;
       isRendering.value = true;
       topError.value = null;
       const previousApp  = selectedApp.value;
@@ -948,34 +970,24 @@ const rootApp = createApp({
       renderResult.value = null;
       selectedApp.value = null;
       staleApp.value = null;
+      const usingMap = selectedLeaves !== undefined;
       try {
         const result = await api("POST", "/api/render", {
           path: rootPath.value.trim(),
           argocd_env: options.value.argocdEnv,
           max_depth: options.value.maxDepth,
           values_override: options.value.valuesOverride.trim() || null,
-          selected_leaves: selectedLeaves ?? null,
-          env_map_path: envMapMode.value === "path" ? (envMapPath.value.trim() || null) : null,
-          env_map_yaml: envMapMode.value === "yaml" ? (envMapYaml.value || null) : null,
+          selected_leaves: usingMap ? selectedLeaves : null,
+          env_map_path: usingMap && envMapMode.value === "path" ? (envMapPath.value.trim() || null) : null,
+          env_map_yaml: usingMap && envMapMode.value === "yaml" ? (envMapYaml.value || null) : null,
         });
         if (!result.ok) {
           topError.value = result.error;
-          awaitingLeafSelection.value = false;
-        } else if (result.valueTree && !result.tree) {
-          // Phase 1: leaves enumerated, nothing rendered yet — show the
-          // checkbox tree and wait for the user to pick a subset.
-          awaitingLeafSelection.value = true;
-          valueTreeLeaves.value = result.leaves;
-          const stillValid = new Set(result.leaves);
-          const kept = [...valueTreeSelected.value].filter((lp) => stillValid.has(lp));
-          valueTreeSelected.value = kept.length ? new Set(kept) : new Set(result.leaves);
-          await loadRecents();
         } else {
-          awaitingLeafSelection.value = false;
           if (result.valueTree) valueTreeLeaves.value = result.leaves;
           renderResult.value = result;
-          const flatList = flattenTree(result.tree);
-          const rootName = result.tree?.name ?? null;
+          const flatList = result.trees.flatMap((t) => flattenTree(t));
+          const rootName = flatList[0]?.node.name ?? null;
           if (pendingSelection.value) {
             const sel = pendingSelection.value;
             pendingSelection.value = null;
@@ -996,15 +1008,78 @@ const rootApp = createApp({
         }
       } catch (e) {
         topError.value = String(e);
-        awaitingLeafSelection.value = false;
       } finally {
         isRendering.value = false;
         syncUrl();
       }
     }
 
-    function renderSelectedLeaves() {
-      return doRender([...valueTreeSelected.value]);
+    function renderPrimary() {
+      if (awaitingLeafSelection.value) return doRender([...valueTreeSelected.value]);
+      return doRender();
+    }
+
+    const primaryButtonLabel = computed(() => {
+      if (isRendering.value) return "Rendering…";
+      if (awaitingLeafSelection.value) return `Render selected (${selectedLeafCount.value})`;
+      return "Render";
+    });
+    const primaryButtonDisabled = computed(() => {
+      if (isBusy.value || !rootPath.value.trim()) return true;
+      if (awaitingLeafSelection.value) return !selectedLeafCount.value;
+      return false;
+    });
+
+    // Create map: the dedicated, explicit "enumerate leaves" action — cheap,
+    // no helm invocations. Never triggered implicitly by Render. Missing or
+    // invalid input just shows an inline message; it never throws or
+    // silently does nothing without feedback.
+    async function createMap() {
+      envMapMessage.value = null;
+      if (envMapMode.value === "none") {
+        envMapMessage.value = { kind: "warning", text: "Select “File path” or “Paste YAML” first." };
+        return;
+      }
+      const hasInput = envMapMode.value === "path" ? envMapPath.value.trim() : envMapYaml.value.trim();
+      if (!hasInput) {
+        envMapMessage.value = {
+          kind: "warning",
+          text: envMapMode.value === "path" ? "Enter a file path first." : "Paste some YAML first.",
+        };
+        return;
+      }
+      if (!rootPath.value.trim()) {
+        envMapMessage.value = { kind: "warning", text: "Enter the root Application path above first." };
+        return;
+      }
+      if (isBusy.value) return;
+
+      isCreatingMap.value = true;
+      try {
+        const result = await api("POST", "/api/render", {
+          path: rootPath.value.trim(),
+          argocd_env: options.value.argocdEnv,
+          max_depth: options.value.maxDepth,
+          values_override: options.value.valuesOverride.trim() || null,
+          selected_leaves: null,
+          env_map_path: envMapMode.value === "path" ? envMapPath.value.trim() : null,
+          env_map_yaml: envMapMode.value === "yaml" ? envMapYaml.value : null,
+        });
+        if (!result.ok) {
+          envMapMessage.value = { kind: "error", text: result.error };
+          return;
+        }
+        awaitingLeafSelection.value = true;
+        valueTreeLeaves.value = result.leaves;
+        const stillValid = new Set(result.leaves);
+        const kept = [...valueTreeSelected.value].filter((lp) => stillValid.has(lp));
+        valueTreeSelected.value = kept.length ? new Set(kept) : new Set(result.leaves);
+        await loadRecents();
+      } catch (e) {
+        envMapMessage.value = { kind: "error", text: String(e) };
+      } finally {
+        isCreatingMap.value = false;
+      }
     }
 
     function toggleLeafGroup(pathKey) {
@@ -1054,7 +1129,7 @@ const rootApp = createApp({
       envMapMode, envMapPath, envMapYaml,
       awaitingLeafSelection, isValueTree, leafTreeFlat, leafTreePrefixes, selectedLeafCount,
       valueTreeLeaves, valueTreeSelected, selectionState, leavesUnder, toggleLeafGroup, selectAllLeaves, selectNoneLeaves,
-      renderSelectedLeaves,
+      primaryButtonLabel, primaryButtonDisabled, renderPrimary, createMap, isCreatingMap, envMapMessage,
     };
   },
 
@@ -1073,7 +1148,7 @@ const rootApp = createApp({
           <label class="path-label">Root Application manifest or chart directory</label>
           <input class="path-input" v-model="rootPath"
                  placeholder="/path/to/root-app.yaml or chart dir"
-                 @keyup.enter="doRender()">
+                 @keyup.enter="renderPrimary()">
         </div>
 
         <!-- Recent files -->
@@ -1153,46 +1228,49 @@ const rootApp = createApp({
             </div>
             <textarea v-if="envMapMode === 'yaml'" class="values-textarea" v-model="envMapYaml"
                       rows="8" placeholder="argocheck_root: clusters&#10;argocheck_leaf_depth: 2&#10;..."></textarea>
-          </div>
-        </div>
 
-        <!-- Render button -->
-        <button class="btn btn-primary render-btn"
-                @click="doRender()"
-                :disabled="isRendering || !rootPath.trim()">
-          {{ isRendering ? "Rendering…" : "Render" }}
-        </button>
-
-        <!-- Value-tree leaf selection (shown once an env map has been enumerated) -->
-        <div class="sidebar-section" v-if="isValueTree">
-          <button class="section-header" @click="sections.leaves = !sections.leaves">
-            Environments ({{ selectedLeafCount }}/{{ leafTreeFlat.filter(e => e.isLeaf).length }})
-            <i class="section-chevron" :class="{open: sections.leaves}">›</i>
-          </button>
-          <div v-if="sections.leaves" class="section-body">
-            <div class="option-row">
-              <button class="btn btn-sm" style="flex:1;justify-content:center" @click="selectAllLeaves()">Select all</button>
-              <button class="btn btn-sm" style="flex:1;justify-content:center" @click="selectNoneLeaves()">Select none</button>
-            </div>
-            <div class="tree-section">
-              <div v-for="({depth, path, pathKey, isLeaf}, i) in leafTreeFlat" :key="pathKey" class="tree-row">
-                <label class="tree-item leaf-checkbox-row">
-                  <span class="tree-prefix">{{ leafTreePrefixes[i] }}</span>
-                  <input type="checkbox"
-                         :checked="selectionState(valueTreeLeaves, valueTreeSelected, pathKey) === 'all'"
-                         v-indeterminate="selectionState(valueTreeLeaves, valueTreeSelected, pathKey) === 'some'"
-                         @change="toggleLeafGroup(pathKey)">
-                  <span class="tree-name">{{ path[path.length - 1] }}</span>
-                </label>
-              </div>
-            </div>
-            <button class="btn btn-primary render-btn"
-                    @click="renderSelectedLeaves()"
-                    :disabled="isRendering || !selectedLeafCount">
-              {{ isRendering ? "Rendering…" : \`Render selected (\${selectedLeafCount})\` }}
+            <!-- Create map: dedicated action, directly under the spec inputs.
+                 Never triggered by Render; missing/invalid input just shows
+                 a message here rather than doing nothing silently. -->
+            <button class="btn" style="width:100%;justify-content:center;margin-top:0.5rem"
+                    @click="createMap()" :disabled="isBusy">
+              {{ isCreatingMap ? "Creating…" : "Create map" }}
             </button>
+            <div v-if="envMapMessage" class="inline-message" :class="envMapMessage.kind">
+              {{ envMapMessage.text }}
+            </div>
+
+            <!-- Leaf checkboxes, shown once the map has been created -->
+            <template v-if="isValueTree">
+              <div class="divider"></div>
+              <p class="hint-text">Environments ({{ selectedLeafCount }}/{{ leafTreeFlat.filter(e => e.isLeaf).length }})</p>
+              <div class="option-row">
+                <button class="btn btn-sm" style="flex:1;justify-content:center" @click="selectAllLeaves()">Select all</button>
+                <button class="btn btn-sm" style="flex:1;justify-content:center" @click="selectNoneLeaves()">Select none</button>
+              </div>
+              <div class="tree-section">
+                <div v-for="({depth, path, pathKey, isLeaf}, i) in leafTreeFlat" :key="pathKey" class="tree-row">
+                  <label class="tree-item leaf-checkbox-row">
+                    <span class="tree-prefix">{{ leafTreePrefixes[i] }}</span>
+                    <input type="checkbox"
+                           :checked="selectionState(valueTreeLeaves, valueTreeSelected, pathKey) === 'all'"
+                           v-indeterminate="selectionState(valueTreeLeaves, valueTreeSelected, pathKey) === 'some'"
+                           @change="toggleLeafGroup(pathKey)">
+                    <span class="tree-name">{{ path[path.length - 1] }}</span>
+                  </label>
+                </div>
+              </div>
+            </template>
           </div>
         </div>
+
+        <!-- Render: always renders — the plain root app, or (once a map has
+             been created) the checked subset of its leaves. -->
+        <button class="btn btn-primary render-btn"
+                @click="renderPrimary()"
+                :disabled="primaryButtonDisabled">
+          {{ primaryButtonLabel }}
+        </button>
 
         <!-- Display controls (shown after a render) -->
         <div class="sidebar-section" v-if="renderResult">
@@ -1297,12 +1375,12 @@ const rootApp = createApp({
           <p>{{ topError }}</p>
         </div>
 
-        <div v-else-if="awaitingLeafSelection" class="welcome">
+        <div v-else-if="awaitingLeafSelection && !renderResult" class="welcome">
           <div style="font-size:2.5rem">⎈</div>
           <h2>Choose environments to render</h2>
           <p>This is a value tree with {{ leafTreeFlat.filter(e => e.isLeaf).length }} leaves. Check which
-             ones to render in the <strong>Environments</strong> section of the sidebar, then click
-             <strong>Render selected</strong>.</p>
+             ones to render in the <strong>Environment map</strong> section of the sidebar, then click
+             <strong>Render selected</strong> below it.</p>
         </div>
 
         <div v-else-if="!renderResult" class="welcome">

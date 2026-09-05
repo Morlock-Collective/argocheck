@@ -69,13 +69,15 @@ def test_ser_node_recurses_into_children():
 
 def test_do_render_plain_app_ignores_env_map_fields_when_unset():
     """A normal render (no env_map_path/env_map_yaml) behaves exactly as
-    before — never enters value-tree territory."""
+    before — never enters value-tree territory, and returns a single-element
+    trees list."""
     req = RenderRequest(path=str(FIXTURES / "root-app-simple.yaml"))
     result = _do_render(req)
 
     assert result["ok"] is True
     assert result["valueTree"] is False
-    assert result["tree"]["manifests"][0]["kind"] == "Deployment"
+    assert len(result["trees"]) == 1
+    assert result["trees"][0]["manifests"][0]["kind"] == "Deployment"
 
 
 def test_do_render_env_map_path_without_selection_only_enumerates():
@@ -89,13 +91,14 @@ def test_do_render_env_map_path_without_selection_only_enumerates():
 
     assert result["ok"] is True
     assert result["valueTree"] is True
-    assert result["tree"] is None
+    assert result["trees"] is None
     assert set(result["leaves"]) == {"prod/ns-a", "prod/ns-b", "qa/ns-a"}
 
 
 def test_do_render_env_map_path_with_selection_renders_only_those_leaves_with_priority():
     """Tree-supplied replicaCount must override the base app's own
-    helm.parameters replicaCount=3 (root-app-simple.yaml)."""
+    helm.parameters replicaCount=3 (root-app-simple.yaml). Each selected leaf
+    comes back as its own independent root tree — no shared parent node."""
     req = RenderRequest(
         path=str(FIXTURES / "root-app-simple.yaml"),
         env_map_path=str(FIXTURES / "value-tree-clusters.yaml"),
@@ -105,13 +108,14 @@ def test_do_render_env_map_path_with_selection_renders_only_those_leaves_with_pr
 
     assert result["ok"] is True
     assert result["valueTree"] is True
-    children = {c["name"]: c for c in result["tree"]["children"]}
-    assert set(children) == {"prod-ns-b", "qa-ns-a"}
-    for child in children.values():
-        assert child["error"] is None
-        assert child["manifests"][0]["kind"] == "Deployment"
-    assert children["prod-ns-b"]["manifests"][0]["spec"]["replicas"] == 5
-    assert children["qa-ns-a"]["manifests"][0]["spec"]["replicas"] == 1
+    trees = {t["name"]: t for t in result["trees"]}
+    assert set(trees) == {"my-app (prod/ns-b)", "my-app (qa/ns-a)"}
+    for tree in trees.values():
+        assert tree["error"] is None
+        assert tree["manifests"][0]["kind"] == "Deployment"
+        assert tree["children"] == []
+    assert trees["my-app (prod/ns-b)"]["manifests"][0]["spec"]["replicas"] == 5
+    assert trees["my-app (qa/ns-a)"]["manifests"][0]["spec"]["replicas"] == 1
 
 
 def test_do_render_env_map_yaml_pasted_works_like_path():

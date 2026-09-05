@@ -202,14 +202,14 @@ argocheck_variable_mappings:                # one entry per level (leaf_depth + 
   - "namespace"                             # depth 2: each namespace name -> --set namespace=<key>
 
 clusters:
+  qa:
+    ns-a:
+      sourceRepo: https://github.com/my-org/qa-values.git
   prod:
     ns-a:
       sourceRepo: https://github.com/my-org/prod-values.git
     ns-b:
       sourceRepo: https://github.com/my-org/prod-values.git
-  qa:
-    ns-a:
-      sourceRepo: https://github.com/my-org/qa-values.git
 ```
 
 Point `argocheck` at your root app exactly as usual, and pass the environment
@@ -219,31 +219,56 @@ map as an extra `--env-map` flag:
 argocheck root-app.yaml --env-map env-map.yaml                     # render every leaf
 argocheck root-app.yaml --env-map env-map.yaml --select prod       # only leaves under "prod"
 argocheck root-app.yaml --env-map env-map.yaml --select prod/ns-a  # a single leaf
-argocheck root-app.yaml --env-map env-map.yaml --show prod-ns-a    # full YAML for one leaf
+argocheck root-app.yaml --env-map env-map.yaml --show "my-app (prod/ns-a)"  # full YAML for one leaf
 ```
 
-`--select` is only valid together with `--env-map`.
+`--select` is only valid together with `--env-map`, and always matches by
+environment-map path (`prod`, `prod/ns-a`), never by display name.
 
-Each leaf's release name (and tree-view label) is its path hyphen-joined
-(`prod-ns-a`). Tree-supplied parameters — both the path variables and the
-leaf's own key/value pairs — are appended *after* the root app's own first
-source's `helm.parameters`, so they win via Helm's last-`--set`-wins
-precedence. Only the root's first source is touched (a multi-source root's
-other sources, e.g. a `$ref` values source, are carried over unchanged), and
-this only applies to the root being fanned out — any child Applications it
-renders resolve their own parameters independently as usual.
+Each leaf is a full standalone instance of the root app, not a child of it —
+so leaves are displayed and tracked as **separate top-level trees**, never
+nested under a shared parent (there isn't one; the root app is only ever a
+template here, and is itself never rendered/shown separately from its
+leaves). Since every leaf is a clone of the same root, its own name (e.g.
+`my-app`) would otherwise be identical, and thus invisible/useless, across
+every leaf — so each leaf's display name is `<root app name> (<environment-map
+path>)`, e.g. `my-app (prod/ns-a)`. `--show` and diff-mode branch assignment
+identify a leaf by this full display name; `--select` identifies it by the
+bare path instead.
+
+The Helm *release name* passed to `helm template`, however, is **not**
+changed per leaf — it stays whatever the un-fanned root app would use. The
+display name above is an argocheck-only bookkeeping detail; it must never
+leak into what Helm actually renders, or leaves would render different
+resource names purely as a side effect of being fanned out, even when
+nothing you specified was meant to cause a difference. Tree-supplied
+parameters — both the path variables and the leaf's own key/value pairs —
+are appended *after* the root app's own first source's `helm.parameters`, so
+they win via Helm's last-`--set`-wins precedence. Only the root's first
+source is touched (a multi-source root's other sources, e.g. a `$ref` values
+source, are carried over unchanged), and this only applies to the root being
+fanned out — any child Applications it renders resolve their own parameters
+independently as usual.
 
 Since every leaf renders as an ordinary app in the tree, [Diff mode](#diff-mode)
-works across them for free — assign `prod-ns-a` as Branch A and `qa-ns-a` as
-Branch B to compare environments resource-by-resource.
+works across them for free — assign `my-app (prod/ns-a)` as Branch A and
+`my-app (qa/ns-a)` as Branch B to compare environments resource-by-resource.
 
-In the web interface, the root path input works exactly as always. An
-**Environment map (optional)** section in the sidebar lets you attach one,
-either as a file path or pasted YAML. Once attached, clicking **Render**
-enumerates the leaves (no `helm template` calls yet — instant) and shows an
-**Environments** checkbox tree instead of rendering immediately; check the
-environments you want (a parent checkbox selects/deselects every leaf under
-it) and click **Render selected** to render only those.
+In the web interface, the root path input and **Render** button work exactly
+as always — Render always renders, and its label indicates when it's about
+to render a set of environments rather than a single root application. An
+**Environment map (optional)** section in the sidebar lets you attach a
+value-tree file, either as a file path or pasted YAML, with a dedicated
+**Create map** button directly beneath those inputs. Create map is never
+triggered by Render — clicking it enumerates the leaves (no `helm template`
+calls yet — instant) and shows a checkbox tree right there in the same
+section (a parent checkbox selects/deselects every leaf under it); if the
+map couldn't be created (missing input, invalid file/YAML) it shows an
+inline warning or error instead of doing nothing. With leaves checked,
+Render's label becomes **Render selected (N)**; clicking it renders only
+those, as separate top-level trees. Editing the environment map's path/YAML
+afterwards requires clicking Create map again, so a stale selection is never
+silently rendered.
 
 ## Chart source types
 

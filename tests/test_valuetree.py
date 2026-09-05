@@ -96,7 +96,12 @@ def test_build_leaf_node_only_touches_first_source():
 
     assert len(node.sources) == 2
     assert node.sources[1] is ref_source  # untouched
-    assert node.sources[0].release_name == "prod-ns-a"
+    # Release name stays whatever the un-fanned base app would use (falls
+    # back to base_node.name here, since chart_source has none set) — the
+    # per-leaf tree label goes on node.name, not the Helm release name, so
+    # rendered resource names don't diverge between leaves.
+    assert node.sources[0].release_name == "my-app"
+    assert node.name == "my-app (prod/ns-a)"
     param_names = [p.name for p in node.sources[0].parameters]
     assert param_names == ["base", "cluster", "namespace", "sourceRepo"]
 
@@ -157,14 +162,33 @@ def test_matches_selection_prefix_and_exact():
     assert not matches_selection(qa_ns_a, "prod")
 
 
-def test_build_leaf_node_uses_base_namespace_and_release_name():
+def test_build_leaf_node_uses_base_namespace_and_preserves_release_name():
+    """node.name shows "<base app name> (<leaf path>)" (for argocheck's own
+    tree/diff UI, since the base app's own name would otherwise be invisible
+    once fanned out); the Helm release name is pinned to whatever the
+    un-fanned base app would use, so every leaf renders identical resource
+    names/content unless the user's own tree values actually cause a
+    difference."""
     base_node = _base_node()
     leaves = parse_leaves(_doc())
     leaf = next(leaf for leaf in leaves if leaf.display_path == "qa/ns-a")
 
     node = build_leaf_node(base_node, leaf)
 
-    assert node.name == "qa-ns-a"
+    assert node.name == "my-app (qa/ns-a)"
     assert node.namespace == "argocd"  # carried over from base_node
-    assert node.sources[0].release_name == "qa-ns-a"
+    assert node.sources[0].release_name == "my-app"  # unchanged from base_node.name
     assert node.sources[0].repo_url == base_node.sources[0].repo_url
+
+
+def test_build_leaf_node_preserves_explicit_base_release_name():
+    """If the base app declares its own helm.releaseName, that (not
+    base_node.name) is what every leaf must keep using."""
+    base_node = _base_node(release_name="explicit-release")
+    leaves = parse_leaves(_doc())
+    leaf = next(leaf for leaf in leaves if leaf.display_path == "prod/ns-b")
+
+    node = build_leaf_node(base_node, leaf)
+
+    assert node.name == "my-app (prod/ns-b)"
+    assert node.sources[0].release_name == "explicit-release"

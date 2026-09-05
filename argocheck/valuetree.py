@@ -119,16 +119,27 @@ def build_leaf_node(base_node: AppNode, leaf: ValueTreeLeaf) -> AppNode:
     last-wins --set semantics. Only the first source is touched — a
     multi-source root app's other sources (e.g. $ref value sources) are
     carried over unchanged. Child Applications the leaf renders resolve
-    their own parameters independently, unaffected by the fan-out."""
+    their own parameters independently, unaffected by the fan-out.
+
+    This AppNode's `name` is "<base app name> (<leaf display path>)" (e.g.
+    "foo (prod/ns-a)") — the base app's own name is otherwise invisible once
+    fanned out across many leaves, so it's shown alongside the path that
+    actually distinguishes them, rather than the path alone. The Helm release
+    name is explicitly pinned to whatever the base app would have used
+    un-fanned — otherwise walker._release_name()'s `source.release_name or
+    node.name` fallback would pick up this per-leaf node name and silently
+    make every leaf's *rendered resources* diverge (via `{{ .Release.Name }}`)
+    even when nothing the user specified was meant to change them."""
     sources = list(base_node.sources)
     first = sources[0]
+    original_release_name = first.release_name or base_node.name
     sources[0] = replace(
         first,
-        release_name=leaf.release_name,
+        release_name=original_release_name,
         parameters=[*first.parameters, *leaf.parameters],
     )
     return AppNode(
-        name=leaf.release_name,
+        name=f"{base_node.name} ({leaf.display_path})",
         namespace=base_node.namespace,
         sources=sources,
         app_manifest=base_node.app_manifest,

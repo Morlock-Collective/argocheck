@@ -132,14 +132,14 @@ def _do_render(req: RenderRequest) -> dict[str, Any]:
     try:
         check_helm()
     except HelmError as e:
-        return {"ok": False, "tree": None, "error": str(e)}
+        return {"ok": False, "trees": None, "error": str(e)}
 
     path = Path(req.path).expanduser()
 
     if path.is_dir():
         chart_dir = path.resolve()
         if not (chart_dir / "Chart.yaml").exists():
-            return {"ok": False, "tree": None, "error": f"{chart_dir} has no Chart.yaml"}
+            return {"ok": False, "trees": None, "error": f"{chart_dir} has no Chart.yaml"}
         root_node = _chart_root_node(chart_dir, req.values_override)
         root_dir = chart_dir.parent
     else:
@@ -147,12 +147,12 @@ def _do_render(req: RenderRequest) -> dict[str, Any]:
             doc = load_yaml_file(path)
             root_node = parse_application(doc)
         except ParseError as e:
-            return {"ok": False, "tree": None, "error": str(e)}
+            return {"ok": False, "trees": None, "error": str(e)}
         root_dir = path.resolve().parent
 
     env_map_doc, error = _load_env_map_doc(req)
     if error:
-        return {"ok": False, "tree": None, "error": error}
+        return {"ok": False, "trees": None, "error": error}
     if env_map_doc is not None:
         return _do_render_with_env_map(root_node, root_dir, env_map_doc, req)
 
@@ -165,8 +165,9 @@ def _do_render(req: RenderRequest) -> dict[str, Any]:
             max_depth=req.max_depth,
             _parent_chart_dir=root_dir,
         )
+        tree = _ser_node(root_node, tmp_dir)
 
-    return {"ok": True, "tree": _ser_node(root_node, tmp_dir), "error": None, "valueTree": False, "leaves": []}
+    return {"ok": True, "trees": [tree], "error": None, "valueTree": False, "leaves": []}
 
 
 def _do_render_with_env_map(
@@ -175,22 +176,24 @@ def _do_render_with_env_map(
     try:
         leaves = parse_leaves(env_map_doc)
     except ValueTreeError as e:
-        return {"ok": False, "tree": None, "error": str(e)}
+        return {"ok": False, "trees": None, "error": str(e)}
 
     all_paths = [leaf.display_path for leaf in leaves]
 
     if req.selected_leaves is None:
         # Phase 1: enumerate only — cheap, no helm invocations. The client
         # shows a checkbox tree and asks again with an explicit selection.
-        return {"ok": True, "tree": None, "error": None, "valueTree": True, "leaves": all_paths}
+        return {"ok": True, "trees": None, "error": None, "valueTree": True, "leaves": all_paths}
 
     selected = set(req.selected_leaves)
     chosen = [leaf for leaf in leaves if leaf.display_path in selected]
     if not chosen:
-        return {"ok": False, "tree": None, "error": "No leaves selected."}
+        return {"ok": False, "trees": None, "error": "No leaves selected."}
 
+    # Each leaf is a full standalone instance of root_node, not a child of
+    # it — there's no shared parent app to nest them under, so every leaf is
+    # rendered and returned as its own independent root tree.
     leaf_nodes = [build_leaf_node(root_node, leaf) for leaf in chosen]
-    root_node.children = leaf_nodes
 
     with tempfile.TemporaryDirectory(prefix="argocheck-") as tmp:
         tmp_dir = Path(tmp)
@@ -202,9 +205,9 @@ def _do_render_with_env_map(
                 max_depth=req.max_depth,
                 _parent_chart_dir=root_dir,
             )
-        tree = _ser_node(root_node, tmp_dir)
+        trees = [_ser_node(n, tmp_dir) for n in leaf_nodes]
 
-    return {"ok": True, "tree": tree, "error": None, "valueTree": True, "leaves": all_paths}
+    return {"ok": True, "trees": trees, "error": None, "valueTree": True, "leaves": all_paths}
 
 
 # ── API routes ────────────────────────────────────────────────────────────────

@@ -220,6 +220,13 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
 .option-row.option-col label { flex: none; }
 
 .hint-text { font-size: 0.78rem; color: var(--text-muted); margin: 0 0 0.6rem; line-height: 1.4; }
+
+.inline-message {
+  border-radius: var(--radius); padding: 0.45rem 0.65rem; font-size: 0.78rem;
+  margin: 0.5rem 0; line-height: 1.4; border: 1px solid transparent;
+}
+.inline-message.warning { background: var(--warning-dim); color: var(--warning); border-color: var(--warning); }
+.inline-message.error { background: var(--error-dim); color: var(--error); border-color: var(--error); }
 .section-body > .path-input, .section-body > .values-textarea { margin-bottom: 0.5rem; }
 .values-textarea {
   width: 100%;

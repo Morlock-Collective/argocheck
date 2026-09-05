@@ -95,7 +95,10 @@ def main(
 
     root_dir = root_app.resolve().parent
 
-    leaf_nodes: list[AppNode] | None = None
+    # Each entry in `roots` is rendered and displayed as its own independent
+    # tree — a value-tree leaf is a full standalone instance of root_node,
+    # not a child of it, so there is never a single shared parent to nest
+    # them under.
     if env_map:
         try:
             env_doc = load_yaml_file(env_map)
@@ -107,42 +110,37 @@ def main(
         except (ParseError, ValueTreeError) as e:
             print_error(str(e))
             sys.exit(1)
-        leaf_nodes = [build_leaf_node(root_node, leaf) for leaf in leaves]
-        root_node.children = leaf_nodes
+        roots: list[AppNode] = [build_leaf_node(root_node, leaf) for leaf in leaves]
+    else:
+        roots = [root_node]
 
-    # Walk the tree inside a single temp directory
+    # Walk each root inside a single shared temp directory
     # Resolve relative repoURLs in the root app relative to the manifest file's directory
     with tempfile.TemporaryDirectory(prefix="argocheck-") as tmp:
         tmp_dir = Path(tmp)
-        if leaf_nodes is not None:
-            for leaf_node in leaf_nodes:
-                walk(
-                    leaf_node,
-                    tmp_dir=tmp_dir,
-                    argocd_env=argocd_env,
-                    max_depth=max_depth,
-                    _parent_chart_dir=root_dir,
-                )
-        else:
-            root_node = walk(
-                root_node,
+        roots = [
+            walk(
+                r,
                 tmp_dir=tmp_dir,
                 argocd_env=argocd_env,
                 max_depth=max_depth,
                 _parent_chart_dir=root_dir,
             )
+            for r in roots
+        ]
 
     # Output
     if show:
-        found = render_app_yaml(root_node, show)
+        found = any(render_app_yaml(r, show) for r in roots)
         if not found:
             print_error(f"Application {show!r} not found in the rendered tree.")
             sys.exit(1)
     else:
-        render_tree(root_node, expand=set(expand_apps))
+        for r in roots:
+            render_tree(r, expand=set(expand_apps))
 
     # Exit non-zero if any node has an error
-    if _has_error(root_node):
+    if any(_has_error(r) for r in roots):
         sys.exit(1)
 
 
