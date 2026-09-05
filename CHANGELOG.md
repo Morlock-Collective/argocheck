@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - New feature that makes it easy to generate per-environment root application instances - for easy validation and diffing.
 - A built-in guide covering the basics, options, environment maps, and diff mode. On the CLI, read it with `argocheck --guide` (all topics) or `argocheck --guide-topic TOPIC` (one topic). In the web interface, click a "?" button next to the sidebar logo, Options, Environment map, or Diff section.
+- Diff mode now warns if Branch A and Branch B are the same application, or sit at different depths in the tree. It still runs the comparison either way.
 
 ### Changed
 - Diff mode and the environment map now show an on/off checkbox in their sidebar section heading. You no longer need to open the section to turn either one on or off.

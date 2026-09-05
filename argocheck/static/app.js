@@ -965,6 +965,17 @@ const rootApp = createApp({
       if (!entryA || !entryB) return null;
       return diffTrees(flat.value, entryA, entryB);
     });
+    // Doesn't block the diff — just flags a likely-unintentional branch pick.
+    const diffWarning = computed(() => {
+      if (!diffMode.value || !diffA.value || !diffB.value) return null;
+      if (diffA.value === diffB.value) {
+        return "Branch A and Branch B are the same application — there is nothing to compare.";
+      }
+      const entryA = flat.value.find((e) => e.pathKey === diffA.value);
+      const entryB = flat.value.find((e) => e.pathKey === diffB.value);
+      if (!entryA || !entryB || entryA.depth === entryB.depth) return null;
+      return `Branch A and Branch B are at different depths in the tree (${entryA.depth} vs ${entryB.depth}) — they may not be comparable subtrees.`;
+    });
 
     const totalApps      = computed(() => flat.value.length);
     const totalResources = computed(() => flat.value.reduce((s, { node }) => s + (node.manifests?.length ?? 0), 0));
@@ -1253,7 +1264,7 @@ const rootApp = createApp({
       sidebarWidth, onHandleMouseDown,
       displayMode, expandSeq, collapseSeq, expandAll, collapseAll,
       viewState, staleApp, selectApp, onResourceStateChange, clearNavigation,
-      diffMode, diffA, diffB, diffShowIdentical, diffFullContext, diffOptions, diffResult, swapDiffBranches,
+      diffMode, diffA, diffB, diffShowIdentical, diffFullContext, diffOptions, diffResult, diffWarning, swapDiffBranches,
       treeItemActions,
       envMapMode, envMapPath, envMapYaml, envMapEnabled,
       awaitingLeafSelection, isValueTree, leafTreeFlat, leafTreePrefixes, selectedLeafCount,
@@ -1551,6 +1562,7 @@ const rootApp = createApp({
               <button class="btn btn-sm" @click="diffMode = false">Turn off</button>
             </div>
             <div class="divider"></div>
+            <div v-if="diffWarning" class="diff-warning">⚠ {{ diffWarning }}</div>
             <div v-if="!diffA || !diffB" class="diff-collapsed">
               Select two applications in the Diff section of the sidebar to compare.
             </div>

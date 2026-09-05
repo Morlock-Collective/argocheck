@@ -303,6 +303,11 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
   padding: 0.6rem 1rem; color: var(--warning); margin-bottom: 1rem; font-size: 0.85rem;
 }
 
+.diff-warning {
+  background: var(--warning-dim); border: 1px solid var(--warning); border-radius: var(--radius);
+  padding: 0.6rem 1rem; color: var(--warning); margin-bottom: 1rem; font-size: 0.85rem;
+}
+
 .diff-mode-banner {
   display: flex; align-items: center; justify-content: space-between; gap: 1rem;
   background: var(--primary-dim); border: 1px solid var(--primary); border-radius: var(--radius);
