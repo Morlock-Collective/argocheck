@@ -238,7 +238,9 @@ function diffTrees(flat, entryA, entryB) {
 
 function diffStatusLabel(status) {
   return {
-    changed: "Changed", added: "Added", removed: "Removed",
+    // "Changed" implies a diff against a previous state, which this isn't —
+    // it's a structural comparison between two branches of the same render.
+    changed: "Differs", added: "Added", removed: "Removed",
     identical: "Identical", onlyA: "Only in A", onlyB: "Only in B",
   }[status] || status;
 }
@@ -894,6 +896,14 @@ const rootApp = createApp({
     const totalResources = computed(() => flat.value.reduce((s, { node }) => s + (node.manifests?.length ?? 0), 0));
     const totalErrors    = computed(() => flat.value.filter(({ node }) => node.error).length);
 
+    // Counts for just the selected app's own subtree (itself + descendants),
+    // shown alongside the grand total so "3 / 6 Applications" tells you how
+    // much of the tree the current selection covers.
+    const selectedSubtreeFlat = computed(() => selectedNode.value ? flattenTree(selectedNode.value) : []);
+    const selectedApps      = computed(() => selectedSubtreeFlat.value.length);
+    const selectedResources = computed(() => selectedSubtreeFlat.value.reduce((s, { node }) => s + (node.manifests?.length ?? 0), 0));
+    const selectedErrors    = computed(() => selectedSubtreeFlat.value.filter(({ node }) => node.error).length);
+
     // ── Actions
     async function loadRecents() {
       recents.value = await api("GET", "/api/recents");
@@ -1163,6 +1173,7 @@ const rootApp = createApp({
       selectedApp, options, sections,
       flat, prefixes, selectedNode, selectedEntry,
       totalApps, totalResources, totalErrors,
+      selectedApps, selectedResources, selectedErrors,
       loadRecents, removeRecent, selectPath, onBrowserSelect, doRender,
       basename, dirname,
       sidebarWidth, onHandleMouseDown,
@@ -1439,15 +1450,15 @@ const rootApp = createApp({
         <template v-else>
           <div class="metrics">
             <div class="metric">
-              <div class="metric-value">{{ totalApps }}</div>
+              <div class="metric-value"><span v-if="!diffMode">{{ selectedApps }} / </span>{{ totalApps }}</div>
               <div class="metric-label">Applications</div>
             </div>
             <div class="metric">
-              <div class="metric-value">{{ totalResources }}</div>
+              <div class="metric-value"><span v-if="!diffMode">{{ selectedResources }} / </span>{{ totalResources }}</div>
               <div class="metric-label">Resources</div>
             </div>
             <div class="metric" :class="{'has-errors': totalErrors > 0}">
-              <div class="metric-value">{{ totalErrors }}</div>
+              <div class="metric-value"><span v-if="!diffMode">{{ selectedErrors }} / </span>{{ totalErrors }}</div>
               <div class="metric-label">Errors</div>
             </div>
           </div>

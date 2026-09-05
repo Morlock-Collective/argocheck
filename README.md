@@ -99,7 +99,7 @@ values, and so on) as an extra `Application` entry, separate from the
 resources that Application renders — so a change to the Application
 definition itself shows up even when it happens to render identical
 resources. Each resource (and each app's own Application entry) gets a
-status: **Identical**, **Changed** (with a line-level diff), **Added**, or
+status: **Identical**, **Differs** (with a line-level diff), **Added**, or
 **Removed**. An app subtree with no counterpart on the other side gets
 **Only in A** or **Only in B**. **Show identical** shows or hides unchanged
 apps/resources. **Diff style** switches between a minimal (context-collapsed)

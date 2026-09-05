@@ -15,9 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Diff mode now shows a banner in the main view when it's active, with a button there to turn it off.
 - Turning on diff mode opens its sidebar section automatically, unless you already picked both branches.
 - Removed the environment map's "None" radio option. The header checkbox already turns it on and off.
+- Renamed the diff status "Changed" to "Differs". Diff mode compares two branches of the same render, not a change from a prior state.
+- The Applications/Resources/Errors counts in the main view now show the selected app's own subtree next to the grand total (e.g. "3 / 6 Applications"), outside diff mode.
 
 ### Fixed
-- The Diff and Environment map section headings had a different text style (case, letter spacing) from the other sidebar sections. They now match.
 - Diff mode ignored each app's own Application resource, and compared only the resources it renders. Two apps with an identical rendered ConfigMap, say, but a different `targetRevision` or Helm value in their own Application spec, showed as "Identical". Diff mode now also compares each app's Application resource, so a change there always shows up.
 
 ## [0.1.0] - 2026-08-31
