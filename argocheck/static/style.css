@@ -320,11 +320,42 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
 .diff-mode-banner .btn { font-weight: 400; }
 
 /* ── Metrics ─────────────────────────────────────────────────────────────── */
-.metrics { display: flex; gap: 1rem; margin-bottom: 1.25rem; }
+.metrics { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
 .metric { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.75rem 1.25rem; min-width: 7rem; }
 .metric-value { font-size: 1.6rem; font-weight: 700; line-height: 1; }
 .metric-label { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem; }
 .metric.has-errors .metric-value { color: var(--error); }
+
+/* Display controls (mode/expand/collapse), parked in the metrics row's own
+   unused space rather than a dedicated sidebar section — it's about the
+   resources shown below, so it reads better next to their counts. Boxed
+   like a .metric tile and labeled, so it reads as one group rather than
+   four unrelated buttons; margin-left is the metrics' own 1rem gap plus an
+   explicit extra 1rem (>= 1.5x that gap), so the two groups read as
+   separate from each other, not as more items in the same row. Kept as one
+   non-wrapping unit so a narrow window drops it below the metrics whole,
+   rather than breaking apart internally into its own two-row grid. */
+.display-controls {
+  margin-left: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.9rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  white-space: nowrap;
+}
+.display-controls-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding-right: 0.6rem;
+  border-right: 1px solid var(--border);
+  flex-shrink: 0;
+}
 
 /* ── App detail ──────────────────────────────────────────────────────────── */
 .divider { height: 1px; background: var(--border); margin-bottom: 1.25rem; }
@@ -363,8 +394,15 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
 
 /* ── Resource viewer ─────────────────────────────────────────────────────── */
 .resources-header { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.5rem; }
-.view-toggle { display: flex; gap: 0.25rem; }
-.view-toggle .btn { flex: 1; justify-content: center; }
+/* A joined segmented control (not a row of separate buttons) — each option
+   overlaps its neighbor's border by 1px and only the outer corners round,
+   so the group reads as one connected toggle rather than unrelated buttons. */
+.view-toggle { display: flex; }
+.view-toggle .btn { flex: 1; justify-content: center; border-radius: 0; }
+.view-toggle .btn:not(:first-child) { margin-left: -1px; }
+.view-toggle .btn:first-child { border-top-left-radius: var(--radius); border-bottom-left-radius: var(--radius); }
+.view-toggle .btn:last-child { border-top-right-radius: var(--radius); border-bottom-right-radius: var(--radius); }
+.view-toggle .btn:hover, .view-toggle .btn.btn-primary { position: relative; z-index: 1; }
 
 .kind-group { margin-bottom: 1.25rem; }
 .kind-heading { font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; padding: 0.35rem 0; border-bottom: 2px solid var(--border); margin-bottom: 0.4rem; }

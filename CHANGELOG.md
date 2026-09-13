@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The web interface's Options and Environment map settings now reflect in the page's URL, alongside the root path/selected app/diff state it already tracked. A values override and an inline environment map YAML are base64-encoded. Bookmarking or sharing the URL restores all of it.
 
 ### Changed
+- Moved the Display controls (Tabs/List, Expand all, Collapse all) out of their own sidebar section, next to the Applications/Resources/Errors counts in the main view. Labeled and boxed as one group, so it doesn't read as four unrelated buttons. Tabs/List is now a single joined toggle, not two separate buttons — also applied to the Diff style Minimal/Full context toggle, for consistency.
 - **Breaking:** reworked the environment map spec. `argocheck_root` is now optional (default: `environments`). `argocheck_variable_mappings` is now a mapping of level (1..leaf_depth) to variable name, not a list — a level with no entry just nests the tree. A leaf's own key/value pairs are now optional. See the Environment maps guide topic and README for the current spec.
 
 ### Fixed

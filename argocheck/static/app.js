@@ -915,7 +915,7 @@ const rootApp = createApp({
     const pendingDiff       = ref(null);  // { a, b } pathKeys to apply once the next render completes
 
     // Sidebar section open/closed
-    const sections = ref({ recents: true, browser: false, options: false, display: false, diff: false, envMap: false });
+    const sections = ref({ recents: true, browser: false, options: false, diff: false, envMap: false });
 
     // ── Help modal
     const helpTopics  = ref([]);
@@ -1605,29 +1605,6 @@ const rootApp = createApp({
           {{ primaryButtonLabel }}
         </button>
 
-        <!-- Display controls (shown after a render) -->
-        <div class="sidebar-section" v-if="renderResult">
-          <button class="section-header" @click="sections.display = !sections.display">
-            Display
-            <i class="section-chevron" :class="{open: sections.display}">›</i>
-          </button>
-          <div v-if="sections.display" class="section-body">
-            <div class="option-row">
-              <label>Mode</label>
-              <div class="view-toggle">
-                <button class="btn btn-sm" :class="{'btn-primary': displayMode === 'tabs'}"
-                        @click="displayMode = 'tabs'">Tabs</button>
-                <button class="btn btn-sm" :class="{'btn-primary': displayMode === 'list'}"
-                        @click="displayMode = 'list'">List</button>
-              </div>
-            </div>
-            <div class="option-row">
-              <button class="btn btn-sm" style="flex:1;justify-content:center" @click="expandAll()">Expand all</button>
-              <button class="btn btn-sm" style="flex:1;justify-content:center" @click="collapseAll()">Collapse all</button>
-            </div>
-          </div>
-        </div>
-
         <!-- Diff mode (shown after a render) -->
         <div class="sidebar-section" v-if="renderResult">
           <div class="section-header checkable">
@@ -1738,6 +1715,17 @@ const rootApp = createApp({
                  :title="!diffMode ? '#errors in subtree / Total #errors' : null">
               <div class="metric-value"><span v-if="!diffMode">{{ selectedErrors }} / </span>{{ totalErrors }}</div>
               <div class="metric-label">Errors</div>
+            </div>
+            <div class="display-controls">
+              <span class="display-controls-label">Display</span>
+              <div class="view-toggle" title="Resource list layout">
+                <button class="btn btn-sm" :class="{'btn-primary': displayMode === 'tabs'}"
+                        @click="displayMode = 'tabs'">Tabs</button>
+                <button class="btn btn-sm" :class="{'btn-primary': displayMode === 'list'}"
+                        @click="displayMode = 'list'">List</button>
+              </div>
+              <button class="btn btn-sm" @click="expandAll()" title="Expand every resource">Expand all</button>
+              <button class="btn btn-sm" @click="collapseAll()" title="Collapse every resource">Collapse all</button>
             </div>
           </div>
           <template v-if="diffMode">
