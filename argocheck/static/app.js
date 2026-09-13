@@ -1699,6 +1699,7 @@ const rootApp = createApp({
           <h2>Getting started</h2>
           <p>Select a root <code>kind:Application</code> manifest, or a directory containing a Helm chart, using Browse… or by typing the path, then click <strong>Render</strong>.</p>
           <p style="color:var(--text-muted)">Requires <code>helm</code> on your PATH.</p>
+          <p>To learn more about the functions and options, click the <button class="help-trigger" style="display: inline">?</button> buttons. </p>
         </div>
 
         <template v-else>

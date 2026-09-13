@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 - Adjusted icon
+- Added note about the integrated docs to the web quickstart guide
+
 
 ## [0.3.1] - 2026-09-13
 
