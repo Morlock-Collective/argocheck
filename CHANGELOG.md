@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.3.1] - 2026-09-13
 
 ### Added
 - Added a new logo instead of the too-helm-adjacent ships wheel (a.k.a helm) with a divers helmet, because I like divers helmets (to look at, not to wear).
@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 - `argocheck --version` reported 0.1.0 after the version bumps in pyproject.toml, because the editable install's own metadata never refreshed. A `pip install -e .` now keeps it in sync.
 - The web interface's "Ignore targetRevision" option had no effect once rendering an environment map's selected leaves — only the leaf-enumeration step honored it.
+
+## [0.3.1] - NEVER RELEASED
 
 ## [0.2.0] - 2026-09-05
 
