@@ -18,7 +18,7 @@ def _doc(**overrides):
     doc = {
         "argocheck_root": "clusters",
         "argocheck_leaf_depth": 2,
-        "argocheck_variable_mappings": ["", "cluster", "namespace"],
+        "argocheck_variable_mappings": {1: "cluster", 2: "namespace"},
         "clusters": {
             "prod": {
                 "ns-a": {"sourceRepo": "repo-a"},
@@ -109,11 +109,15 @@ def test_build_leaf_node_only_touches_first_source():
     assert param_names == ["base", "cluster", "namespace", "sourceRepo"]
 
 
-def test_missing_argocheck_root_raises():
+def test_missing_argocheck_root_defaults_to_environments():
+    """argocheck_root is optional: with no override, the top-level key must
+    be named "environments"."""
     doc = _doc()
     del doc["argocheck_root"]
-    with pytest.raises(ValueTreeError, match="argocheck_root"):
-        parse_leaves(doc)
+    doc["environments"] = doc.pop("clusters")
+
+    leaves = parse_leaves(doc)
+    assert {leaf.display_path for leaf in leaves} == {"prod/ns-a", "prod/ns-b", "qa/ns-a"}
 
 
 def test_argocheck_root_pointing_at_missing_key_raises():
@@ -122,16 +126,57 @@ def test_argocheck_root_pointing_at_missing_key_raises():
         parse_leaves(doc)
 
 
-def test_variable_mappings_length_mismatch_raises():
-    doc = _doc(argocheck_variable_mappings=["", "cluster"])  # missing "namespace"
-    with pytest.raises(ValueTreeError, match="leaf_depth"):
+def test_variable_mappings_must_be_a_mapping():
+    doc = _doc(argocheck_variable_mappings=["", "cluster", "namespace"])
+    with pytest.raises(ValueTreeError, match="mapping"):
         parse_leaves(doc)
+
+
+def test_variable_mappings_key_below_one_raises():
+    doc = _doc(argocheck_variable_mappings={0: "cluster", 2: "namespace"})
+    with pytest.raises(ValueTreeError, match="out of range"):
+        parse_leaves(doc)
+
+
+def test_variable_mappings_key_above_leaf_depth_raises():
+    doc = _doc(argocheck_variable_mappings={1: "cluster", 3: "namespace"})
+    with pytest.raises(ValueTreeError, match="out of range"):
+        parse_leaves(doc)
+
+
+def test_variable_mappings_may_omit_levels():
+    """A level with no entry still nests the tree; it just isn't exposed as
+    a --set variable."""
+    doc = _doc(argocheck_variable_mappings={2: "namespace"})
+    leaves = parse_leaves(doc)
+    leaf = next(leaf for leaf in leaves if leaf.display_path == "prod/ns-a")
+
+    params = {p.name: p.value for p in leaf.parameters}
+    assert params == {"namespace": "ns-a", "sourceRepo": "repo-a"}
+
+
+def test_variable_mappings_may_be_empty():
+    doc = _doc(argocheck_variable_mappings={})
+    leaves = parse_leaves(doc)
+    assert {leaf.display_path for leaf in leaves} == {"prod/ns-a", "prod/ns-b", "qa/ns-a"}
 
 
 def test_leaf_depth_must_be_positive():
-    doc = _doc(argocheck_leaf_depth=0, argocheck_variable_mappings=[""])
+    doc = _doc(argocheck_leaf_depth=0, argocheck_variable_mappings={})
     with pytest.raises(ValueTreeError, match="positive"):
         parse_leaves(doc)
+
+
+def test_leaf_node_may_be_empty():
+    """The final level's own key/value pairs are optional — an empty (or
+    entirely absent, i.e. YAML null) leaf is valid, not an error."""
+    doc = _doc()
+    doc["clusters"]["qa"]["ns-a"] = None
+    leaves = parse_leaves(doc)
+    leaf = next(leaf for leaf in leaves if leaf.display_path == "qa/ns-a")
+
+    params = {p.name: p.value for p in leaf.parameters}
+    assert params == {"cluster": "qa", "namespace": "ns-a"}
 
 
 def test_non_mapping_at_tree_level_raises():

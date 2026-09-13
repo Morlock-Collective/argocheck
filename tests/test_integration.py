@@ -263,7 +263,7 @@ def test_value_tree_leaves_render_identical_resources_when_tree_values_are_unuse
     env_doc = {
         "argocheck_root": "clusters",
         "argocheck_leaf_depth": 2,
-        "argocheck_variable_mappings": ["", "cluster2", "namespace3"],
+        "argocheck_variable_mappings": {1: "cluster2", 2: "namespace3"},
         "clusters": {
             "prod": {"ns-a": {}, "ns-b": {}},
             "qa": {"ns-a": {}},
@@ -295,7 +295,7 @@ def test_value_tree_leaf_map_and_list_values_render_correctly():
     env_doc = {
         "argocheck_root": "envs",
         "argocheck_leaf_depth": 1,
-        "argocheck_variable_mappings": ["", "env"],
+        "argocheck_variable_mappings": {1: "env"},
         "envs": {
             "prod": {"image": {"repository": "custom-repo", "tag": "v2"}},
         },

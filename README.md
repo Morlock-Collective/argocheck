@@ -205,12 +205,11 @@ An environment map is a separate file from the root Application. It never
 contains a chart reference itself.
 
 ```yaml
-argocheck_root: clusters                    # which top-level key holds the tree
+argocheck_root: clusters                    # which top-level key holds the tree (optional, default: environments)
 argocheck_leaf_depth: 2                     # how many levels of keyed nesting before the leaf's own values
-argocheck_variable_mappings:                # one entry per level (leaf_depth + 1), "" = no variable bound
-  - ""                                      # depth 0: the "clusters" container itself
-  - "cluster"                               # depth 1: each cluster name -> --set cluster=<key>
-  - "namespace"                             # depth 2: each namespace name -> --set namespace=<key>
+argocheck_variable_mappings:                # level (1..leaf_depth) -> variable name; a level with no entry
+  1: cluster                                # just nests, without also becoming a --set variable
+  2: namespace
 
 clusters:
   qa:
@@ -219,8 +218,7 @@ clusters:
   prod:
     ns-a:
       sourceRepo: https://github.com/my-org/prod-values.git
-    ns-b:
-      sourceRepo: https://github.com/my-org/prod-values.git
+    ns-b:                                   # a leaf's own values are optional
 ```
 
 Point `argocheck` at your root app as usual, and add the environment map as

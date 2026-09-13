@@ -93,9 +93,8 @@ HELP_TOPICS: list[dict[str, Any]] = [
                 'argocheck_root: clusters\n'
                 'argocheck_leaf_depth: 2\n'
                 'argocheck_variable_mappings:\n'
-                '  - ""\n'
-                '  - "cluster"\n'
-                '  - "namespace"\n'
+                '  1: cluster\n'
+                '  2: namespace\n'
                 '\n'
                 'clusters:\n'
                 '  qa:\n'
@@ -105,25 +104,30 @@ HELP_TOPICS: list[dict[str, Any]] = [
                 '    ns-a:\n'
                 '      sourceRepo: https://github.com/my-org/prod-values.git\n'
                 '    ns-b:\n'
-                '      sourceRepo: https://github.com/my-org/prod-values.git\n'
             },
             {"type": "p", "text":
                 "argocheck_root names the top-level key that holds the tree "
-                "(clusters here). argocheck_leaf_depth counts the levels of "
-                "keyed nesting before each leaf's own values — 2 here, for "
-                "cluster then namespace."},
+                "(clusters here). It's optional — leave it out and argocheck "
+                "looks for a top-level environments key instead."},
             {"type": "p", "text":
-                "argocheck_variable_mappings has one entry per level "
-                "(leaf_depth + 1): the first entry is for the root container "
-                "itself (\"\" here, meaning no variable), then one entry per "
-                "nested level. Here, each cluster name becomes "
-                "--set cluster=<name>, and each namespace name becomes "
-                "--set namespace=<name>."},
+                "argocheck_leaf_depth counts the levels of keyed nesting "
+                "before each leaf's own values — 2 here, for cluster then "
+                "namespace."},
             {"type": "p", "text":
-                "For the example above, clusters.prod.ns-b renders with "
-                "--set cluster=prod --set namespace=ns-b "
+                "argocheck_variable_mappings binds a Helm variable name to "
+                "one or more of those levels, keyed 1 to leaf_depth. Here, "
+                "each cluster name becomes --set cluster=<name>, and each "
+                "namespace name becomes --set namespace=<name>. A level with "
+                "no entry still nests the tree, it just isn't exposed as a "
+                "variable."},
+            {"type": "p", "text":
+                "For the example above, clusters.prod.ns-a renders with "
+                "--set cluster=prod --set namespace=ns-a "
                 "--set sourceRepo=https://github.com/my-org/prod-values.git, "
-                "on top of the root app's own parameters."},
+                "on top of the root app's own parameters. clusters.prod.ns-b "
+                "has no values of its own — a leaf's key/value pairs are "
+                "optional — so it renders with just --set cluster=prod "
+                "--set namespace=ns-b."},
             {"type": "p", "text":
                 "A leaf's own values aren't limited to scalars — lists and "
                 "nested mappings work too, passed via Helm's --set-json."},

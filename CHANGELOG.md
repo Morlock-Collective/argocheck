@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - New "Ignore targetRevision" option (CLI: `--ignore-target-revision`). Resolves every source as if targetRevision were unset. A local git repo uses its working tree as-is, a remote git repo its default branch, a Helm repo chart its latest version. Useful against a local checkout that would normally pin a specific revision. Does not affect rendering of the application manifests themselves.
 - The environment map's inline YAML input now offers "Save to file…" once it renders a map. It writes the YAML to a file and switches the section to "File path", pointing at that file, keeping the current leaf selection.
 
+### Changed
+- **Breaking:** reworked the environment map spec. `argocheck_root` is now optional (default: `environments`). `argocheck_variable_mappings` is now a mapping of level (1..leaf_depth) to variable name, not a list — a level with no entry just nests the tree. A leaf's own key/value pairs are now optional. See the Environment maps guide topic and README for the current spec.
+
 ### Fixed
 - `argocheck --version` reported 0.1.0 after the version bumps in pyproject.toml, because the editable install's own metadata never refreshed. A `pip install -e .` now keeps it in sync.
 

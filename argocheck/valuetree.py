@@ -17,6 +17,7 @@ from typing import Any
 from .models import AppNode, HelmParameter
 
 _ROOT_KEY = "argocheck_root"
+_DEFAULT_ROOT_KEY = "environments"
 _LEAF_DEPTH_KEY = "argocheck_leaf_depth"
 _VARIABLE_MAPPINGS_KEY = "argocheck_variable_mappings"
 
@@ -41,14 +42,12 @@ class ValueTreeLeaf:
 
 
 def is_value_tree(doc: dict[str, Any]) -> bool:
-    return _ROOT_KEY in doc
+    return _LEAF_DEPTH_KEY in doc
 
 
 def parse_leaves(doc: dict[str, Any]) -> list[ValueTreeLeaf]:
     """Parse a value-tree document into its flattened list of leaves."""
-    if _ROOT_KEY not in doc:
-        raise ValueTreeError(f"Missing required key: {_ROOT_KEY}")
-    root_key = doc[_ROOT_KEY]
+    root_key = doc.get(_ROOT_KEY, _DEFAULT_ROOT_KEY)
     if not isinstance(root_key, str) or root_key not in doc:
         raise ValueTreeError(f"{_ROOT_KEY}={root_key!r} but no top-level {root_key!r} key found")
 
@@ -56,17 +55,7 @@ def parse_leaves(doc: dict[str, Any]) -> list[ValueTreeLeaf]:
     if not isinstance(leaf_depth, int) or isinstance(leaf_depth, bool) or leaf_depth < 1:
         raise ValueTreeError(f"{_LEAF_DEPTH_KEY} must be a positive integer")
 
-    variable_mappings = doc.get(_VARIABLE_MAPPINGS_KEY)
-    if not isinstance(variable_mappings, list):
-        raise ValueTreeError(f"{_VARIABLE_MAPPINGS_KEY} must be a list")
-    if len(variable_mappings) != leaf_depth + 1:
-        raise ValueTreeError(
-            f"{_VARIABLE_MAPPINGS_KEY} must have exactly {_LEAF_DEPTH_KEY} + 1 "
-            f"({leaf_depth + 1}) entries, got {len(variable_mappings)}"
-        )
-    for i, name in enumerate(variable_mappings):
-        if not isinstance(name, str):
-            raise ValueTreeError(f"{_VARIABLE_MAPPINGS_KEY}[{i}] must be a string")
+    variable_mappings = _parse_variable_mappings(doc.get(_VARIABLE_MAPPINGS_KEY, {}), leaf_depth)
 
     leaves: list[ValueTreeLeaf] = []
     _walk(doc[root_key], depth=1, leaf_depth=leaf_depth,
@@ -82,6 +71,29 @@ def parse_leaves(doc: dict[str, Any]) -> list[ValueTreeLeaf]:
         seen_names.add(leaf.release_name)
 
     return leaves
+
+
+def _parse_variable_mappings(raw: Any, leaf_depth: int) -> dict[int, str]:
+    """Validate argocheck_variable_mappings: a mapping of level (1..leaf_depth)
+    to the Helm variable name that level's key is bound to. A level with no
+    entry here still nests the tree, it just isn't exposed as a --set
+    variable."""
+    if not isinstance(raw, dict):
+        raise ValueTreeError(f"{_VARIABLE_MAPPINGS_KEY} must be a mapping of level -> variable name")
+
+    mappings: dict[int, str] = {}
+    for level, name in raw.items():
+        if not isinstance(level, int) or isinstance(level, bool):
+            raise ValueTreeError(f"{_VARIABLE_MAPPINGS_KEY} keys must be integers, got {level!r}")
+        if level < 1 or level > leaf_depth:
+            raise ValueTreeError(
+                f"{_VARIABLE_MAPPINGS_KEY} key {level} is out of range: must be between 1 "
+                f"and {_LEAF_DEPTH_KEY} ({leaf_depth})"
+            )
+        if not isinstance(name, str):
+            raise ValueTreeError(f"{_VARIABLE_MAPPINGS_KEY}[{level}] must be a string")
+        mappings[level] = name
+    return mappings
 
 
 def _encode_leaf_value(value: Any) -> tuple[str, bool]:
@@ -117,16 +129,19 @@ def _walk(
     node: Any,
     depth: int,
     leaf_depth: int,
-    variable_mappings: list[str],
+    variable_mappings: dict[int, str],
     path: tuple[str, ...],
     params: list[HelmParameter],
     out: list[ValueTreeLeaf],
 ) -> None:
-    if not isinstance(node, dict):
-        where = "/".join(path) or "<root>"
-        raise ValueTreeError(f"Expected a mapping at {where!r}, got {type(node).__name__}")
-
     if depth > leaf_depth:
+        # The final level's own key/value pairs are optional — nothing to add
+        # beyond the path variables already collected is perfectly valid.
+        if node is None:
+            node = {}
+        if not isinstance(node, dict):
+            where = "/".join(path) or "<root>"
+            raise ValueTreeError(f"Expected a mapping at {where!r}, got {type(node).__name__}")
         leaf_params = list(params)
         for key, value in node.items():
             encoded, is_json = _encode_leaf_value(value)
@@ -134,7 +149,11 @@ def _walk(
         out.append(ValueTreeLeaf(path=path, parameters=leaf_params))
         return
 
-    var_name = variable_mappings[depth]
+    if not isinstance(node, dict):
+        where = "/".join(path) or "<root>"
+        raise ValueTreeError(f"Expected a mapping at {where!r}, got {type(node).__name__}")
+
+    var_name = variable_mappings.get(depth, "")
     for key, child in node.items():
         child_params = list(params)
         if var_name:

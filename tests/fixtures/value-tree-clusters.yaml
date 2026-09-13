@@ -1,9 +1,8 @@
 argocheck_root: clusters
 argocheck_leaf_depth: 2
 argocheck_variable_mappings:
-  - ""
-  - "cluster"
-  - "namespace"
+  1: cluster
+  2: namespace
 
 clusters:
   prod:
