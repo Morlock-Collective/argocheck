@@ -1280,7 +1280,7 @@ const rootApp = createApp({
       <!-- ── Sidebar ── -->
       <aside class="sidebar" :style="{ width: sidebarWidth + 'px' }">
         <div class="sidebar-header">
-          <span class="logo-icon">⎈</span>
+          <span class="logo-icon-small" />
           <span class="logo">argocheck</span>
           <button class="help-trigger" @click="openHelp('basics')" title="Help: Basics">?</button>
         </div>
@@ -1526,7 +1526,7 @@ const rootApp = createApp({
         </div>
 
         <div v-else-if="awaitingLeafSelection && !renderResult" class="welcome">
-          <div style="font-size:2.5rem">⎈</div>
+          <span class="logo-icon" />
           <h2>Choose environments to render</h2>
           <p>This is a value tree with {{ leafTreeFlat.filter(e => e.isLeaf).length }} leaves. Check which
              ones to render in the <strong>Environment map</strong> section of the sidebar, then click
@@ -1534,7 +1534,7 @@ const rootApp = createApp({
         </div>
 
         <div v-else-if="!renderResult" class="welcome">
-          <div style="font-size:2.5rem">⎈</div>
+          <span class="logo-icon" />
           <h2>Getting started</h2>
           <p>Select a root <code>kind:Application</code> manifest, or a directory containing a Helm chart, using Browse… or by typing the path, then click <strong>Render</strong>.</p>
           <p style="color:var(--text-muted)">Requires <code>helm</code> on your PATH.</p>

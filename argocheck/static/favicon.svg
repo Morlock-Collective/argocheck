@@ -1,19 +1,64 @@
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="48"
-    height="48" viewBox="0 0 12.7 12.7">
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+<svg width="256" height="256" version="1.1" viewBox="0 0 67.733 67.733"
+    xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
     <style>
-        :root { --icon-color: #000; }
+        :root { 
+            --section-1: #282828;
+            --section-2: #dedede;
+            --check: #36cb00;
+        }
         @media (prefers-color-scheme: dark) {
-            :root { --icon-color: #fff; }
+            :root { 
+                --section-1: #dedede;
+                --section-2: #282828;
+                --check: #2fb400;
+            }
+        }
+        .hide-in-favicon {
+            visibility: hidden
+        }
+        #content:target ~ .hide-in-favicon {
+            visibility: visible;
+        }
+        #content:target ~ g .hide-in-favicon {
+            visibility: visible;
         }
     </style>
-    <circle cx="6.35" cy="6.35" r=".731"
-        style="fill:var(--icon-color);stroke-width:.00977347;stroke-linejoin:round;-inkscape-stroke:none" />
-    <rect id="a" width="1.002" height="11.772" x="5.849" y=".464" rx=".501" ry=".501"
-        style="fill:var(--icon-color);stroke-width:.0216885;stroke-linejoin:round;-inkscape-stroke:none" />
-    <use xlink:href="#a" transform="rotate(60 6.35 6.35)" />
-    <use xlink:href="#a" transform="rotate(120 6.35 6.35)" />
-    <circle cx="6.35" cy="6.35" r="3.33"
-        style="fill:none;stroke:var(--icon-color);stroke-width:1.13631;stroke-linejoin:round;stroke-opacity:1;-inkscape-stroke:none" />
-    <circle cx="6.35" cy="6.35" r="1.266"
-        style="fill:var(--icon-color);fill-opacity:1;stroke:none;stroke-width:.431929;stroke-linejoin:round;stroke-opacity:1;-inkscape-stroke:none" />
+    <g fill="var(--section-1)">
+        <path
+            d="m54.703 22.096c-2e-6 11.507-9.3286 34.549-20.836 34.549-11.507 0-20.836-23.041-20.836-34.549 0-11.507 9.3286-20.836 20.836-20.836 11.507 0 20.836 9.3286 20.836 20.836z"
+            stroke-linecap="round" stroke-linejoin="round" stroke-width="1.3463" />
+        <rect x="12.218" y="35.282" width="43.297" height="7.6495" rx="1.7625" ry="1.7625" />
+        <path
+            d="m9.2482 39.107h49.235c2.1157 0 3.9926 1.7165 3.8761 3.827-0.42401 7.686-4.1584 24.27-28.493 24.27-24.337 0-28.069-16.587-28.493-24.272-0.11623-2.1094 1.7598-3.825 3.8744-3.825z"
+            image-rendering="auto" stroke-linecap="round" stroke-linejoin="round"
+            stroke-width="1.3463" />
+    </g>
+    <g fill="var(--section-1)">
+        <circle cx="33.867" cy="20.549" r="13.544" fill="var(--section-2)" />
+        <circle cx="33.867" cy="20.549" r="11.299" />
+        <rect id="rect6" x="51.084" y="15.068" width="4.809" height="13.884" rx="1.7334" ry="1.7334"
+            fill="var(--section-1)" />
+        <use transform="translate(-39.243)" fill="#000000" xlink:href="#rect6" />
+    </g>
+    <rect id="content" width="0" height="0" fill="none" />
+    <g id="bars" transform="matrix(1.685 0 0 1.8466 -24.428 -28.743)" class="hide-in-favicon">
+        <path d="m32.244 20.825s-0.06692 2.7709-0.06692 5.8682 0.06692 5.8682 0.06692 5.8682"
+            fill="none" stroke="var(--section-2)" stroke-linecap="round" stroke-linejoin="round"
+            stroke-width="1" />
+        <path d="m36.951 20.825s0.06692 2.9206 0.06692 5.8682-0.06692 5.8682-0.06692 5.8682"
+            fill="none" stroke="var(--section-2)" stroke-linecap="round" stroke-linejoin="round"
+            stroke-width="1" />
+    </g>
+    <g id="bars" transform="rotate(90 33.867 20.549) matrix(1.685 0 0 1.8466 -24.428 -28.743)" class="hide-in-favicon">
+        <path d="m32.244 20.825s-0.06692 2.7709-0.06692 5.8682 0.06692 5.8682 0.06692 5.8682"
+            fill="none" stroke="var(--section-2)" stroke-linecap="round" stroke-linejoin="round"
+            stroke-width="1" />
+        <path d="m36.951 20.825s0.06692 2.9206 0.06692 5.8682-0.06692 5.8682-0.06692 5.8682"
+            fill="none" stroke="var(--section-2)" stroke-linecap="round" stroke-linejoin="round"
+            stroke-width="1" />
+    </g>
+    <path d="m27 54.5 5 4.75 9.82-10.7" fill="none" stroke="var(--check)"
+        stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" class="hide-in-favicon" />
 </svg>

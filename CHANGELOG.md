@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Added a new logo instead of the too-helm-adjacent ships wheel (a.k.a helm) with a divers helmet, because I like divers helmets (to look at, not to wear).
+
 ## [0.2.0] - 2026-09-05
 
 ### Added
