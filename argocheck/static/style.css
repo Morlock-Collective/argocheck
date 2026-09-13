@@ -63,6 +63,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
 .sidebar-header .logo { font-size: 1.1rem; font-weight: 700; letter-spacing: -0.02em; }
 .logo-icon { content: url(/static/favicon.svg#content); width: 4rem; }
 .logo-icon-small { content: url(/static/favicon.svg); width: 1.5rem; }
+.app-version { font-size: 0.75rem; color: var(--text-muted); }
 
 
 .sidebar-section { border-bottom: 1px solid var(--border-light); }

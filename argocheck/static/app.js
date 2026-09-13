@@ -799,6 +799,7 @@ const rootApp = createApp({
     // ── State
     const rootPath    = ref("");
     const recents     = ref([]);
+    const appVersion  = ref("");
     const isRendering = ref(false);
     const renderResult = ref(null);   // { ok, trees, error }
     const topError    = ref(null);
@@ -1236,6 +1237,7 @@ const rootApp = createApp({
 
     onMounted(() => {
       loadRecents();
+      api("GET", "/api/version").then((r) => { appVersion.value = r.version; }).catch(() => {});
       const params = new URLSearchParams(window.location.search);
       const path = params.get("path");
       if (path) {
@@ -1260,7 +1262,7 @@ const rootApp = createApp({
       totalApps, totalResources, totalErrors,
       selectedApps, selectedResources, selectedErrors,
       loadRecents, removeRecent, selectPath, onBrowserSelect, doRender,
-      basename, dirname,
+      basename, dirname, appVersion,
       sidebarWidth, onHandleMouseDown,
       displayMode, expandSeq, collapseSeq, expandAll, collapseAll,
       viewState, staleApp, selectApp, onResourceStateChange, clearNavigation,
@@ -1282,6 +1284,7 @@ const rootApp = createApp({
         <div class="sidebar-header">
           <span class="logo-icon-small" />
           <span class="logo">argocheck</span>
+          <span v-if="appVersion" class="app-version" :title="'argocheck ' + appVersion">v{{ appVersion }}</span>
           <button class="help-trigger" @click="openHelp('basics')" title="Help: Basics">?</button>
         </div>
 

@@ -5,6 +5,7 @@ import asyncio
 import tempfile
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor
+from importlib.metadata import version as _pkg_version
 from pathlib import Path
 from typing import Any
 
@@ -234,6 +235,11 @@ def api_delete_recent(path: str = Query(...)) -> dict[str, bool]:
 @app.get("/api/help")
 def api_help() -> dict[str, Any]:
     return {"topics": HELP_TOPICS}
+
+
+@app.get("/api/version")
+def api_version() -> dict[str, str]:
+    return {"version": _pkg_version("argocheck")}
 
 
 @app.get("/api/browse")

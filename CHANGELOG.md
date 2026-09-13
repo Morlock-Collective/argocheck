@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 - Added a new logo instead of the too-helm-adjacent ships wheel (a.k.a helm) with a divers helmet, because I like divers helmets (to look at, not to wear).
+- The web interface now shows the running argocheck version next to the sidebar title.
+
+### Fixed
+- `argocheck --version` reported 0.1.0 after the version bumps in pyproject.toml, because the editable install's own metadata never refreshed. A `pip install -e .` now keeps it in sync.
 
 ## [0.2.0] - 2026-09-05
 
