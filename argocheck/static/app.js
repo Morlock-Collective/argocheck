@@ -262,6 +262,54 @@ function updateQueryParams(updates) {
   history.replaceState(null, "", url);
 }
 
+// Query-param text codec for large-ish free-text values (a values override,
+// an inline env-map YAML). Plain base64 is enough today, but these can be
+// arbitrarily long (a big env-map YAML) and URLs have practical length
+// limits — if that ever becomes a real problem, the fix is a compressed
+// format (e.g. via CompressionStream), added as a second marker below,
+// without disturbing this one. Every encoded value is stamped
+// "<format-marker>.<payload>" up front specifically so that migration can
+// happen later without breaking URLs already bookmarked/shared under the
+// current format: the decoder dispatches on the marker instead of assuming.
+// There's no pre-marker format to fall back to — this scheme shipped with
+// no users yet — so an unrecognized marker only ever means one thing: this
+// build is older than whatever produced the URL. That's worth a console
+// warning (not silent absence), since the fix is "update argocheck", not
+// "re-enter the value".
+const _QUERY_TEXT_FORMAT_BASE64 = "b"; // plain UTF-8 -> base64, no compression
+
+function encodeQueryText(str) {
+  const bytes = new TextEncoder().encode(str);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return `${_QUERY_TEXT_FORMAT_BASE64}.${btoa(binary)}`;
+}
+
+// Returns null on an unrecognized/missing format marker, invalid base64, or
+// invalid UTF-8 once decoded — the caller treats all of these like the
+// param being absent, rather than crashing on a corrupted or (see above)
+// not-yet-understood URL.
+function decodeQueryText(value) {
+  const sepIndex = value.indexOf(".");
+  const marker = sepIndex === -1 ? value : value.slice(0, sepIndex);
+  const payload = sepIndex === -1 ? "" : value.slice(sepIndex + 1);
+  if (marker !== _QUERY_TEXT_FORMAT_BASE64) {
+    console.warn(
+      `Unrecognized query-param format marker ${JSON.stringify(marker)} — this ` +
+      "URL was likely produced by a newer argocheck. Update argocheck to use it."
+    );
+    return null;
+  }
+  try {
+    const binary = atob(payload);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return null;
+  }
+}
+
 function highlightYaml(obj) {
   const str = jsyaml.dump(obj, { indent: 2, noRefs: true, lineWidth: -1 });
   return hljs.highlight(str, { language: "yaml" }).value;
@@ -1065,8 +1113,24 @@ const rootApp = createApp({
         diff: diffMode.value ? "1" : null,
         diffA: diffMode.value ? diffA.value : null,
         diffB: diffMode.value ? diffB.value : null,
+        // Options — only written when they differ from their default, to
+        // keep a plain render's URL short.
+        argocdEnv: options.value.argocdEnv ? "1" : null,
+        maxDepth: options.value.maxDepth !== 10 ? String(options.value.maxDepth) : null,
+        ignoreTargetRevision: options.value.ignoreTargetRevision ? "1" : null,
+        valuesOverride: options.value.valuesOverride.trim() ? encodeQueryText(options.value.valuesOverride) : null,
+        // Environment map
+        envMapMode: envMapMode.value !== "none" ? envMapMode.value : null,
+        envMapPath: envMapMode.value === "path" && envMapPath.value.trim() ? envMapPath.value.trim() : null,
+        envMapYaml: envMapMode.value === "yaml" && envMapYaml.value.trim() ? encodeQueryText(envMapYaml.value) : null,
       });
     }
+
+    watch(
+      [options, envMapMode, envMapPath, envMapYaml],
+      syncUrl,
+      { deep: true },
+    );
 
     watch([diffMode, diffA, diffB], syncUrl);
 
@@ -1302,6 +1366,29 @@ const rootApp = createApp({
       loadRecents();
       api("GET", "/api/version").then((r) => { appVersion.value = r.version; }).catch(() => {});
       const params = new URLSearchParams(window.location.search);
+
+      // Options — restored independently of whether a root path is present.
+      options.value.argocdEnv = params.get("argocdEnv") === "1";
+      const restoredMaxDepth = parseInt(params.get("maxDepth"), 10);
+      options.value.maxDepth = Number.isInteger(restoredMaxDepth) && restoredMaxDepth > 0 ? restoredMaxDepth : 10;
+      options.value.ignoreTargetRevision = params.get("ignoreTargetRevision") === "1";
+      if (params.has("valuesOverride")) {
+        const decoded = decodeQueryText(params.get("valuesOverride"));
+        if (decoded !== null) options.value.valuesOverride = decoded;
+      }
+
+      // Environment map
+      const restoredEnvMapMode = params.get("envMapMode");
+      if (restoredEnvMapMode === "path" || restoredEnvMapMode === "yaml") {
+        envMapMode.value = restoredEnvMapMode;
+        if (restoredEnvMapMode === "path") {
+          envMapPath.value = params.get("envMapPath") || "";
+        } else if (params.has("envMapYaml")) {
+          const decoded = decodeQueryText(params.get("envMapYaml"));
+          if (decoded !== null) envMapYaml.value = decoded;
+        }
+      }
+
       const path = params.get("path");
       if (path) {
         rootPath.value = path;

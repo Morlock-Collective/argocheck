@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The web interface now shows the running argocheck version next to the sidebar title.
 - New "Ignore targetRevision" option (CLI: `--ignore-target-revision`). Resolves every source as if targetRevision were unset. A local git repo uses its working tree as-is, a remote git repo its default branch, a Helm repo chart its latest version. Useful against a local checkout that would normally pin a specific revision. Does not affect rendering of the application manifests themselves.
 - The environment map's inline YAML input now offers "Save to file…" once it renders a map. It writes the YAML to a file and switches the section to "File path", pointing at that file, keeping the current leaf selection.
+- The web interface's Options and Environment map settings now reflect in the page's URL, alongside the root path/selected app/diff state it already tracked. A values override and an inline environment map YAML are base64-encoded. Bookmarking or sharing the URL restores all of it.
 
 ### Changed
 - **Breaking:** reworked the environment map spec. `argocheck_root` is now optional (default: `environments`). `argocheck_variable_mappings` is now a mapping of level (1..leaf_depth) to variable name, not a list — a level with no entry just nests the tree. A leaf's own key/value pairs are now optional. See the Environment maps guide topic and README for the current spec.

@@ -80,6 +80,9 @@ The interface provides:
 - **Built-in guide** — click a "?" button next to the sidebar logo, Options,
   Environment map, or Diff section for an in-context explanation of that
   topic
+- **Shareable state** — the root path, selected app, options, diff branches,
+  and environment map (path or inline YAML) all reflect in the page's URL, so
+  bookmarking or sharing it reopens the page in the same state
 
 #### Diff mode
 

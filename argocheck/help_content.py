@@ -72,6 +72,11 @@ HELP_TOPICS: list[dict[str, Any]] = [
                 "when the root is a bare chart directory rather than an "
                 "Application manifest. Web interface only.",
             ]},
+            {"type": "p", "text":
+                "Web interface only: every setting here, plus the "
+                "environment map's own path/YAML, reflects in the page's "
+                "URL. Bookmarking or sharing that URL reopens the page with "
+                "them already filled in."},
         ],
     },
     {
