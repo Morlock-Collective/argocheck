@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 - Adjusted icon
 - Added note about the integrated docs to the web quickstart guide
-
+- Remove overflow:hidden from the recent file/chart names (full path is still overflow:hidden)
 
 ## [0.3.1] - 2026-09-13
 
