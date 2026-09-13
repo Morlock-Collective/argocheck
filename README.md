@@ -1,5 +1,7 @@
 # argocheck
 
+<img src="/argocheck/static/favicon.svg#content" style="width: 4em" />
+
 A local validator, dry-runner, and diff tool for ArgoCD app-of-apps Helm
 structures. It supports multi-source Applications.
 
