@@ -138,6 +138,10 @@ HELP_TOPICS: list[dict[str, Any]] = [
                 "map to enumerate the leaves — instant, no helm calls yet — "
                 "check which ones you want, then click Render."},
             {"type": "p", "text":
+                "Once inline YAML has produced a map, Save to file… writes "
+                "it to a file and switches the section to File path pointing "
+                "at it, for reuse or version control."},
+            {"type": "p", "text":
                 "Each leaf is a full standalone instance of the root app, "
                 "not a child of it, so leaves appear as separate top-level "
                 "trees. Since every leaf clones the same root, its display "

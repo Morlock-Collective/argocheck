@@ -244,6 +244,26 @@ def api_version() -> dict[str, str]:
     return {"version": _pkg_version("argocheck")}
 
 
+class SaveEnvMapRequest(BaseModel):
+    path: str
+    content: str
+
+
+@app.post("/api/save-env-map")
+def api_save_env_map(req: SaveEnvMapRequest) -> dict[str, Any]:
+    path = Path(req.path).expanduser()
+    if not path.is_absolute():
+        return {"ok": False, "error": f"Not an absolute path: {req.path}"}
+    if path.is_dir():
+        return {"ok": False, "error": f"{path} is a directory."}
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(req.content)
+    except OSError as e:
+        return {"ok": False, "error": str(e)}
+    return {"ok": True, "path": str(path)}
+
+
 @app.get("/api/browse")
 def api_browse(path: str = Query(default="~")) -> dict[str, Any]:
     p = Path(path).expanduser().resolve()

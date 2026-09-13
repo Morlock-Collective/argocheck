@@ -1,5 +1,5 @@
 "use strict";
-const { createApp, ref, computed, watch, onMounted, onUnmounted } = Vue;
+const { createApp, ref, computed, watch, onMounted, onUnmounted, nextTick } = Vue;
 
 // ── Utilities ─────────────────────────────────────────────────────────────
 
@@ -819,6 +819,14 @@ const rootApp = createApp({
     const isCreatingMap = ref(false);
     const envMapMessage = ref(null);  // { kind: "warning"|"error", text } shown under Create map
 
+    // Save the inline YAML to a file, then switch the section over to
+    // "File path" pointing at it — a one-way move from the "YAML" input to
+    // "File path", not a two-way sync.
+    const envMapSaving     = ref(false);  // showing the destination-path prompt
+    const envMapSavePath   = ref("");
+    const envMapSaveMessage = ref(null);  // { kind: "warning"|"error", text }
+    const isSavingEnvMap   = ref(false);
+
     // Section-header checkbox: on/off view of envMapMode. Remembers the last
     // non-"none" mode so toggling off then back on restores it, instead of
     // always resetting to "path".
@@ -839,11 +847,15 @@ const rootApp = createApp({
       valueTreeSelected.value = new Set();
       envMapMessage.value = null;
     }
-    watch(envMapMode, resetLeafSelection);
+    // Set while Save to file switches envMapMode/envMapPath itself: the
+    // saved file holds the exact YAML that was just rendered, so the
+    // existing leaf selection is still valid and shouldn't be thrown away.
+    const preservingLeafSelection = ref(false);
+    watch(envMapMode, () => { if (!preservingLeafSelection.value) resetLeafSelection(); });
     // Editing the env-map source after creating a map goes back to requiring
     // an explicit "Create map" click rather than silently rendering a stale
     // selection against a spec that's since changed.
-    watch(envMapPath, resetLeafSelection);
+    watch(envMapPath, () => { if (!preservingLeafSelection.value) resetLeafSelection(); });
     watch(envMapYaml, resetLeafSelection);
 
     // ── Diff mode
@@ -1224,6 +1236,55 @@ const rootApp = createApp({
       }
     }
 
+    // Save to file: only offered once the inline YAML has actually produced a
+    // map (isValueTree), not merely typed — same "must render first" bar as
+    // Create map itself.
+    const canSaveEnvMap = computed(() => envMapMode.value === "yaml" && isValueTree.value);
+
+    function startSaveEnvMap() {
+      envMapSaveMessage.value = null;
+      const dir = rootPath.value.trim() ? dirname(rootPath.value.trim()) : "";
+      envMapSavePath.value = dir ? `${dir}/env-map.yaml` : "env-map.yaml";
+      envMapSaving.value = true;
+    }
+
+    function cancelSaveEnvMap() {
+      envMapSaving.value = false;
+      envMapSaveMessage.value = null;
+    }
+
+    async function confirmSaveEnvMap() {
+      const path = envMapSavePath.value.trim();
+      if (!path) {
+        envMapSaveMessage.value = { kind: "warning", text: "Enter a file path first." };
+        return;
+      }
+      isSavingEnvMap.value = true;
+      try {
+        const result = await api("POST", "/api/save-env-map", { path, content: envMapYaml.value });
+        if (!result.ok) {
+          envMapSaveMessage.value = { kind: "error", text: result.error };
+          return;
+        }
+        // Switch over to "File path" pointing at the saved file — the point
+        // of saving is to keep using it from disk from here on. The file
+        // holds exactly the YAML that was just rendered, so the existing
+        // leaf selection carries over instead of demanding another Create
+        // map click.
+        preservingLeafSelection.value = true;
+        envMapPath.value = result.path;
+        envMapMode.value = "path";
+        await nextTick();
+        preservingLeafSelection.value = false;
+        envMapSaving.value = false;
+        envMapSaveMessage.value = null;
+      } catch (e) {
+        envMapSaveMessage.value = { kind: "error", text: String(e) };
+      } finally {
+        isSavingEnvMap.value = false;
+      }
+    }
+
     function toggleLeafGroup(pathKey) {
       const state = selectionState(valueTreeLeaves.value, valueTreeSelected.value, pathKey);
       const under = leavesUnder(valueTreeLeaves.value, pathKey);
@@ -1274,6 +1335,8 @@ const rootApp = createApp({
       awaitingLeafSelection, isValueTree, leafTreeFlat, leafTreePrefixes, selectedLeafCount,
       valueTreeLeaves, valueTreeSelected, selectionState, leavesUnder, toggleLeafGroup, selectAllLeaves, selectNoneLeaves,
       primaryButtonLabel, primaryButtonDisabled, renderPrimary, createMap, isCreatingMap, envMapMessage,
+      canSaveEnvMap, envMapSaving, envMapSavePath, envMapSaveMessage, isSavingEnvMap,
+      startSaveEnvMap, cancelSaveEnvMap, confirmSaveEnvMap,
       helpTopics, helpOpen, helpActive, openHelp, closeHelp,
     };
   },
@@ -1394,6 +1457,31 @@ const rootApp = createApp({
               </button>
               <div v-if="envMapMessage" class="inline-message" :class="envMapMessage.kind">
                 {{ envMapMessage.text }}
+              </div>
+
+              <!-- Save the inline YAML to a file, then switch to "File path"
+                   pointing at it. Only offered once it has actually rendered
+                   a map (canSaveEnvMap), not merely been typed. -->
+              <button v-if="canSaveEnvMap && !envMapSaving" class="btn btn-sm"
+                      style="width:100%;justify-content:center;margin-top:0.5rem"
+                      @click="startSaveEnvMap()">
+                Save to file…
+              </button>
+              <div v-if="envMapSaving" class="option-row option-col" style="margin-top:0.5rem">
+                <label for="envmap-save-path">Save as</label>
+                <input id="envmap-save-path" class="path-input" v-model="envMapSavePath"
+                       placeholder="/path/to/env-map.yaml" @keyup.enter="confirmSaveEnvMap()">
+                <div class="option-row">
+                  <button class="btn btn-sm btn-primary" style="flex:1;justify-content:center"
+                          @click="confirmSaveEnvMap()" :disabled="isSavingEnvMap">
+                    {{ isSavingEnvMap ? "Saving…" : "Save" }}
+                  </button>
+                  <button class="btn btn-sm" style="flex:1;justify-content:center"
+                          @click="cancelSaveEnvMap()" :disabled="isSavingEnvMap">Cancel</button>
+                </div>
+                <div v-if="envMapSaveMessage" class="inline-message" :class="envMapSaveMessage.kind">
+                  {{ envMapSaveMessage.text }}
+                </div>
               </div>
 
               <!-- Leaf checkboxes, shown once the map has been created -->

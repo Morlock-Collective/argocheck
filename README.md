@@ -312,6 +312,9 @@ An **Environment map (optional)** section in the sidebar adds the rest:
 - If you edit the environment map's path or YAML afterwards, you must click
   Create map again before you can render. This stops a stale selection from
   rendering silently.
+- Once inline YAML produces a map, a **Save to file…** button appears.
+  It writes the YAML to a file you choose and switches the section to **File
+  path**, pointing at that file.
 
 Create map and Render are separate actions: Render never triggers Create map.
 
