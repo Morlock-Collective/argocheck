@@ -68,8 +68,8 @@ backend — no separate deployment or build step required.
 
 The interface provides:
 - **Sidebar** — path input, recent-files list, filesystem browser, options
-  (argocd-env toggle, max-depth), and the application tree with `├─`/`└─`
-  hierarchy lines and ✅/❌ status icons
+  (argocd-env toggle, max-depth, ignore targetRevision), and the application
+  tree with `├─`/`└─` hierarchy lines and ✅/❌ status icons
 - **Detail panel** — source info, child app links, resources grouped by kind
   with collapsible syntax-highlighted YAML per resource
 - **Application YAML toggle** — switches between the compact source view and
@@ -130,6 +130,7 @@ manifest.
 | `--show APP_NAME` | Print the full YAML of every manifest rendered by the named app instead of the tree. |
 | `--argocd-env` | Inject dummy `ARGOCD_APP_*` values into every `helm template` call. |
 | `--max-depth N` | Maximum recursion depth (default: 10). |
+| `--ignore-target-revision` | Resolve every source as if `targetRevision` were unset (its working tree, default branch, or latest chart version). Does not affect rendering. |
 | `--guide` | Print the built-in guide (all topics) and exit. |
 | `--guide-topic TOPIC` | Print one topic from the built-in guide (`basics`, `options`, `environment-map`, or `diffing`) and exit. |
 | `--version` | Print version and exit. |

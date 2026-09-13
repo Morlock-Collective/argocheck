@@ -133,6 +133,20 @@ def test_resolve_local_git_recovers_from_corrupt_cache(local_repo):
         assert _git("rev-parse", "HEAD", cwd=resolved) == v1_sha
 
 
+def test_resolve_local_git_ignore_target_revision_uses_working_tree(local_repo):
+    """ignore_target_revision=True resolves a local git repo as if
+    targetRevision were HEAD, regardless of what the source actually declares."""
+    repo, _ = local_repo
+    (repo / "values.yaml").write_text("replicaCount: 99\n")  # uncommitted
+
+    src = HelmSource(repo_url=str(repo), target_revision="feature")
+    with tempfile.TemporaryDirectory() as tmp:
+        resolved = resolve_source(src, tmp_dir=Path(tmp), ignore_target_revision=True)
+
+    assert resolved == repo
+    assert (resolved / "values.yaml").read_text() == "replicaCount: 99\n"
+
+
 def test_resolve_local_non_git_directory_ignores_revision():
     """A plain (non-git) local directory has no revision concept: targetRevision
     is ignored and the directory is used as-is, same as before this feature."""

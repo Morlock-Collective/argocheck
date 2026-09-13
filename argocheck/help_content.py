@@ -62,6 +62,12 @@ HELP_TOPICS: list[dict[str, Any]] = [
                 "render them. CLI: --argocd-env.",
                 "Max recursion depth — how many levels of child Application "
                 "to follow before stopping. Default: 10. CLI: --max-depth N.",
+                "Ignore targetRevision — resolve every source as if "
+                "targetRevision were unset: a local git repo's working tree "
+                "as-is, a remote git repo's default branch, or a Helm repo "
+                "chart's latest version. Useful when testing against a local "
+                "checkout that would normally pin a specific revision. Does "
+                "not affect rendering. CLI: --ignore-target-revision.",
                 "Values override — extra Helm values (YAML), used only "
                 "when the root is a bare chart directory rather than an "
                 "Application manifest. Web interface only.",

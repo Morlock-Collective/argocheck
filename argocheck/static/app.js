@@ -804,7 +804,7 @@ const rootApp = createApp({
     const renderResult = ref(null);   // { ok, trees, error }
     const topError    = ref(null);
     const selectedApp = ref(null);
-    const options     = ref({ argocdEnv: false, maxDepth: 10, valuesOverride: "" });
+    const options     = ref({ argocdEnv: false, maxDepth: 10, ignoreTargetRevision: false, valuesOverride: "" });
 
     // ── Navigation state (recorded in the URL query string)
     const viewState     = ref({ kind: null, open: [] }); // resource-viewer state for selectedApp
@@ -1116,6 +1116,7 @@ const rootApp = createApp({
           path: rootPath.value.trim(),
           argocd_env: options.value.argocdEnv,
           max_depth: options.value.maxDepth,
+          ignore_target_revision: options.value.ignoreTargetRevision,
           values_override: options.value.valuesOverride.trim() || null,
           selected_leaves: usingMap ? selectedLeaves : null,
           env_map_path: usingMap && envMapMode.value === "path" ? (envMapPath.value.trim() || null) : null,
@@ -1200,6 +1201,7 @@ const rootApp = createApp({
           path: rootPath.value.trim(),
           argocd_env: options.value.argocdEnv,
           max_depth: options.value.maxDepth,
+          ignore_target_revision: options.value.ignoreTargetRevision,
           values_override: options.value.valuesOverride.trim() || null,
           selected_leaves: null,
           env_map_path: envMapMode.value === "path" ? envMapPath.value.trim() : null,
@@ -1342,6 +1344,10 @@ const rootApp = createApp({
             <div class="option-row">
               <label for="opt-depth">Max recursion depth</label>
               <input id="opt-depth" type="number" v-model.number="options.maxDepth" min="1" max="50">
+            </div>
+            <div class="option-row">
+              <input type="checkbox" v-model="options.ignoreTargetRevision" id="opt-ignore-rev">
+              <label for="opt-ignore-rev">Ignore targetRevision</label>
             </div>
             <div class="option-row option-col">
               <label for="opt-values">Values override (chart-directory roots)</label>

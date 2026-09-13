@@ -60,6 +60,15 @@ def _print_guide_topic_and_exit(ctx: click.Context, param: click.Parameter, valu
     help="Maximum app-of-apps recursion depth.",
 )
 @click.option(
+    "--ignore-target-revision",
+    is_flag=True,
+    default=False,
+    help="Resolve every source as if targetRevision were unset (its working "
+         "tree, default branch, or latest chart version). Useful when testing "
+         "against local checkouts that would normally pin a specific revision. "
+         "Does not affect rendering.",
+)
+@click.option(
     "--env-map",
     "env_map",
     metavar="PATH",
@@ -102,6 +111,7 @@ def main(
     show: str | None,
     argocd_env: bool,
     max_depth: int,
+    ignore_target_revision: bool,
     env_map: Path | None,
     selections: tuple[str, ...],
 ) -> None:
@@ -159,6 +169,7 @@ def main(
                 tmp_dir=tmp_dir,
                 argocd_env=argocd_env,
                 max_depth=max_depth,
+                ignore_target_revision=ignore_target_revision,
                 _parent_chart_dir=root_dir,
             )
             for r in roots

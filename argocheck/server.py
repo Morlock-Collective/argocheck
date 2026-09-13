@@ -84,6 +84,7 @@ class RenderRequest(BaseModel):
     path: str
     argocd_env: bool = False
     max_depth: int = 10
+    ignore_target_revision: bool = False
     values_override: str | None = None
     # Optional value-tree (environment map) add-on, fanning `path`'s root out
     # across a nested value map instead of rendering it once. At most one of
@@ -165,6 +166,7 @@ def _do_render(req: RenderRequest) -> dict[str, Any]:
             tmp_dir=tmp_dir,
             argocd_env=req.argocd_env,
             max_depth=req.max_depth,
+            ignore_target_revision=req.ignore_target_revision,
             _parent_chart_dir=root_dir,
         )
         tree = _ser_node(root_node, tmp_dir)

@@ -19,12 +19,19 @@ def resolve_source(
     tmp_dir: Path,
     working_dir: Path | None = None,
     require_chart: bool = True,
+    ignore_target_revision: bool = False,
 ) -> Path:
     """
     Return the local path to the chart (or values) directory for the given source.
 
     working_dir is the directory of the parent chart (for resolving relative repoURLs).
     require_chart=False skips the Chart.yaml check — used for ref-only value sources.
+    ignore_target_revision=True resolves every source as if targetRevision were
+    HEAD/unset — e.g. a local git repo's working tree as-is, a remote git repo's
+    default branch, a Helm repo chart's latest version — regardless of what the
+    Application actually declares. This only changes which source gets resolved
+    and rendered, never the rendered output's own values (an --argocd-env
+    render's ARGOCD_APP_SOURCE_TARGET_REVISION is unaffected).
     """
     repo_url = source.repo_url
 
@@ -32,21 +39,22 @@ def resolve_source(
         repo_url = repo_url[len("file://"):]
 
     if _is_local(repo_url):
-        return _resolve_local(repo_url, source, working_dir, require_chart, tmp_dir)
+        return _resolve_local(repo_url, source, working_dir, require_chart, tmp_dir, ignore_target_revision)
 
     if source.chart and (repo_url.startswith("oci://") or _is_http(repo_url)):
-        return _resolve_helm_repo(source, tmp_dir)
+        return _resolve_helm_repo(source, tmp_dir, ignore_target_revision)
 
     if _is_git(repo_url):
-        return _resolve_git(source, tmp_dir, require_chart)
+        return _resolve_git(source, tmp_dir, require_chart, ignore_target_revision)
 
-    return _resolve_local(repo_url, source, working_dir, require_chart, tmp_dir)
+    return _resolve_local(repo_url, source, working_dir, require_chart, tmp_dir, ignore_target_revision)
 
 
 def resolve_ref_map(
     sources: list[HelmSource],
     tmp_dir: Path,
     working_dir: Path | None = None,
+    ignore_target_revision: bool = False,
 ) -> dict[str, Path]:
     """
     Resolve all sources that have a `ref` field to local directories.
@@ -56,7 +64,8 @@ def resolve_ref_map(
     for src in sources:
         if src.ref:
             local_dir = resolve_source(
-                src, tmp_dir=tmp_dir, working_dir=working_dir, require_chart=False
+                src, tmp_dir=tmp_dir, working_dir=working_dir, require_chart=False,
+                ignore_target_revision=ignore_target_revision,
             )
             ref_map[src.ref] = local_dir
     return ref_map
@@ -88,6 +97,7 @@ def _resolve_local(
     working_dir: Path | None,
     require_chart: bool,
     tmp_dir: Path,
+    ignore_target_revision: bool = False,
 ) -> Path:
     base = working_dir or Path.cwd()
     chart_base = Path(repo_url) if Path(repo_url).is_absolute() else base / repo_url
@@ -96,7 +106,7 @@ def _resolve_local(
     if not chart_base.exists():
         raise ResolveError(f"Local chart path does not exist: {chart_base}")
 
-    revision = source.target_revision
+    revision = "HEAD" if ignore_target_revision else source.target_revision
     if revision not in ("HEAD", "", None) and (chart_base / ".git").exists():
         chart_base = _resolve_local_git(chart_base, revision, tmp_dir)
 
@@ -172,12 +182,14 @@ def _resolve_local_git(repo_path: Path, revision: str, tmp_dir: Path) -> Path:
     return dest
 
 
-def _resolve_helm_repo(source: HelmSource, tmp_dir: Path) -> Path:
+def _resolve_helm_repo(source: HelmSource, tmp_dir: Path, ignore_target_revision: bool = False) -> Path:
     assert source.chart is not None
 
     repo_url = source.repo_url
     chart_name = source.chart
-    version = source.target_revision if source.target_revision not in ("HEAD", "") else None
+    version = None if ignore_target_revision else (
+        source.target_revision if source.target_revision not in ("HEAD", "") else None
+    )
 
     if repo_url.startswith("oci://"):
         chart_ref = f"{repo_url.rstrip('/')}/{chart_name}"
@@ -199,9 +211,9 @@ def _resolve_helm_repo(source: HelmSource, tmp_dir: Path) -> Path:
     return candidates[0]
 
 
-def _resolve_git(source: HelmSource, tmp_dir: Path, require_chart: bool) -> Path:
+def _resolve_git(source: HelmSource, tmp_dir: Path, require_chart: bool, ignore_target_revision: bool = False) -> Path:
     repo_url = source.repo_url
-    revision = source.target_revision or "HEAD"
+    revision = "HEAD" if ignore_target_revision else (source.target_revision or "HEAD")
 
     # Key on both URL and revision so different branches never share a directory,
     # and the same URL+revision is reused within a single run without re-cloning.

@@ -68,6 +68,7 @@ def walk(
     *,
     argocd_env: bool = False,
     max_depth: int = 10,
+    ignore_target_revision: bool = False,
     _depth: int = 0,
     _visited: set[str] | None = None,
     _parent_chart_dir: Path | None = None,
@@ -93,7 +94,8 @@ def walk(
     # Build the ref map from any sources that carry a `ref` field.
     try:
         ref_map = resolve_ref_map(
-            node.sources, tmp_dir=tmp_dir, working_dir=_parent_chart_dir
+            node.sources, tmp_dir=tmp_dir, working_dir=_parent_chart_dir,
+            ignore_target_revision=ignore_target_revision,
         )
     except (ResolveError, HelmError) as e:
         node.error = e
@@ -116,7 +118,7 @@ def walk(
         try:
             source_dir = resolve_source(
                 source, tmp_dir=tmp_dir, working_dir=_parent_chart_dir,
-                require_chart=False,
+                require_chart=False, ignore_target_revision=ignore_target_revision,
             )
         except (ResolveError, HelmError) as e:
             node.error = e
@@ -170,6 +172,7 @@ def walk(
             tmp_dir=tmp_dir,
             argocd_env=argocd_env,
             max_depth=max_depth,
+            ignore_target_revision=ignore_target_revision,
             _depth=_depth + 1,
             _visited=_visited,
             _parent_chart_dir=primary_dir,
