@@ -6,14 +6,13 @@
         :root { 
             --section-1: #282828;
             --section-2: #dedede;
-            --check: #36cb00;
-            --visor-stroke: 8px;
+            --visor-stroke: 3px;
         }
         @media (prefers-color-scheme: dark) {
             :root { 
                 --section-1: #dedede;
                 --section-2: #282828;
-                --check: #2fb400;
+                --visor-stroke: 7px;
             }
         }
         .hide-in-favicon {
@@ -43,9 +42,9 @@
     <g fill="var(--section-1)">
         <circle cx="33.867" cy="20.549" r="14" fill="var(--section-2)" />
         <circle cx="33.867" cy="20.549" r="11" fill="var(--section-1)" stroke="var(--section-2)" stroke-width="var(--visor-stroke)"/>
-        <rect id="rect6" x="51.084" y="15.068" width="4.809" height="13.884" rx="1.7334" ry="1.7334"
+        <rect id="sideglass" x="51.084" y="12" width="4.809" height="16" rx="1.7334" ry="1.7334"
             fill="var(--section-1)" />
-        <use transform="translate(-39.243)" fill="#000000" xlink:href="#rect6" />
+        <use transform="translate(-39.243)" fill="#000000" xlink:href="#sideglass" />
     </g>
     <g id="bars" transform="matrix(1.685 0 0 1.8466 -24.428 -28.743)" class="hide-in-favicon">
         <path d="m32.244 20.825s-0.06692 2.7709-0.06692 5.8682 0.06692 5.8682 0.06692 5.8682"
@@ -63,6 +62,6 @@
             fill="none" stroke="var(--section-2)" stroke-linecap="round" stroke-linejoin="round"
             stroke-width="1" />
     </g>
-    <path d="m27 54.5 5 4.75 9.82-10.7" fill="none" stroke="var(--check)"
+    <path d="m27 54.5 5 4.75 9.82-10.7" fill="none" stroke="var(--section-2)"
         stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" class="hide-in-favicon" />
 </svg>
