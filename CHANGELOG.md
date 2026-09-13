@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - `argocheck --version` reported 0.1.0 after the version bumps in pyproject.toml, because the editable install's own metadata never refreshed. A `pip install -e .` now keeps it in sync.
+- The web interface's "Ignore targetRevision" option had no effect once rendering an environment map's selected leaves — only the leaf-enumeration step honored it.
 
 ## [0.2.0] - 2026-09-05
 

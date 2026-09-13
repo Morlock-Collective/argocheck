@@ -207,6 +207,7 @@ def _do_render_with_env_map(
                 tmp_dir=tmp_dir,
                 argocd_env=req.argocd_env,
                 max_depth=req.max_depth,
+                ignore_target_revision=req.ignore_target_revision,
                 _parent_chart_dir=root_dir,
             )
         trees = [_ser_node(n, tmp_dir) for n in leaf_nodes]
