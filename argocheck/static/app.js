@@ -1,6 +1,25 @@
 "use strict";
 const { createApp, ref, computed, watch, onMounted, onUnmounted, nextTick } = Vue;
 
+// ── Plugin registry (see argocheck.plugins / EXTENDING.md) ─────────────────
+//
+// A plugin registers via window.argocheckPlugin(fn) (defined in index.html,
+// before this script), which either calls fn(registry) immediately — if
+// we've already published window.__argocheckRegistry below — or queues it.
+// Draining the queue here picks up anything a plugin registered before this
+// script ran, so registration works regardless of script load order.
+const pluginRegistry = {
+  sidebarSections: [],    // { title, component }
+  renderInterceptors: [], // { beforeRequest?(req), afterResult?(result) }
+  helpTopics: [],         // { id, title, blocks }
+  addSidebarSection(section) { this.sidebarSections.push(section); },
+  addRenderInterceptor(interceptor) { this.renderInterceptors.push(interceptor); },
+  addHelpTopics(topics) { this.helpTopics.push(...topics); },
+};
+window.__argocheckRegistry = pluginRegistry;
+(window.argocheckPluginQueue || []).forEach((fn) => fn(pluginRegistry));
+window.argocheckPluginQueue = [];
+
 // ── Utilities ─────────────────────────────────────────────────────────────
 
 function basename(p) { return p.split("/").pop() || p; }
@@ -939,6 +958,13 @@ const rootApp = createApp({
     // Sidebar section open/closed
     const sections = ref({ recents: true, browser: false, options: false, diff: false, envMap: false });
 
+    // ── Plugin-contributed sidebar sections
+    const pluginSidebarSections = pluginRegistry.sidebarSections;
+    const pluginSectionOpen = ref({});
+    function togglePluginSection(title) {
+      pluginSectionOpen.value[title] = !pluginSectionOpen.value[title];
+    }
+
     // ── Help modal
     const helpTopics  = ref([]);
     const helpOpen    = ref(false);
@@ -949,7 +975,9 @@ const rootApp = createApp({
         // request fails — a bad response here must not wedge future clicks
         // into re-throwing on `.length` before they can retry the fetch.
         const result = await api("GET", "/api/help").catch(() => null);
-        helpTopics.value = result?.topics ?? [];
+        // /api/help already includes server-side (Python) plugin topics;
+        // pluginRegistry.helpTopics covers frontend-only (pure-JS) plugins.
+        helpTopics.value = [...(result?.topics ?? []), ...pluginRegistry.helpTopics];
       }
       helpActive.value = topicId;
       helpOpen.value = true;
@@ -1210,7 +1238,7 @@ const rootApp = createApp({
       staleApp.value = null;
       const usingMap = selectedLeaves !== undefined;
       try {
-        const result = await api("POST", "/api/render", {
+        const payload = {
           path: rootPath.value.trim(),
           argocd_env: options.value.argocdEnv,
           max_depth: options.value.maxDepth,
@@ -1219,7 +1247,10 @@ const rootApp = createApp({
           selected_leaves: usingMap ? selectedLeaves : null,
           env_map_path: usingMap && envMapMode.value === "path" ? (envMapPath.value.trim() || null) : null,
           env_map_yaml: usingMap && envMapMode.value === "yaml" ? (envMapYaml.value || null) : null,
-        });
+        };
+        for (const i of pluginRegistry.renderInterceptors) i.beforeRequest?.(payload);
+        const result = await api("POST", "/api/render", payload);
+        for (const i of pluginRegistry.renderInterceptors) i.afterResult?.(result);
         if (!result.ok) {
           topError.value = result.error;
         } else {
@@ -1430,6 +1461,7 @@ const rootApp = createApp({
     return {
       rootPath, recents, isRendering, renderResult, topError,
       selectedApp, options, sections,
+      pluginSidebarSections, pluginSectionOpen, togglePluginSection,
       flat, prefixes, selectedNode, selectedEntry,
       totalApps, totalResources, totalErrors,
       selectedApps, selectedResources, selectedErrors,
@@ -1672,6 +1704,17 @@ const rootApp = createApp({
               </div>
             </template>
             <p v-else class="hint-text">Check the box above to compare two applications side-by-side.</p>
+          </div>
+        </div>
+
+        <!-- Plugin-contributed sidebar sections (see argocheck.plugins / EXTENDING.md) -->
+        <div class="sidebar-section" v-for="section in pluginSidebarSections" :key="section.title">
+          <button class="section-header" @click="togglePluginSection(section.title)">
+            {{ section.title }}
+            <i class="section-chevron" :class="{open: pluginSectionOpen[section.title]}">›</i>
+          </button>
+          <div v-if="pluginSectionOpen[section.title]" class="section-body">
+            <component :is="section.component"></component>
           </div>
         </div>
 

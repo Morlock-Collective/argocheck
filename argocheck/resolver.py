@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .helm import HelmError, helm_pull, helm_repo_add, helm_repo_update
 from .models import HelmSource
+from .plugins import ResolveContext, get_registry
 
 
 class ResolveError(Exception):
@@ -33,6 +34,11 @@ def resolve_source(
     and rendered, never the rendered output's own values (an --argocd-env
     render's ARGOCD_APP_SOURCE_TARGET_REVISION is unaffected).
     """
+    context = ResolveContext(working_dir=working_dir, tmp_dir=tmp_dir, require_chart=require_chart)
+    plugin_path = get_registry().resolve_source(source, context)
+    if plugin_path is not None:
+        return plugin_path
+
     repo_url = source.repo_url
 
     if repo_url.startswith("file://"):

@@ -460,6 +460,12 @@ the same tree node. It renders each chart source with its own `releaseName`
 argocheck passes `spec.destination.namespace` as `--namespace` to `helm
 template`, and ignores the destination server and cluster fields.
 
+## Extending argocheck
+
+If your organization has its own chart/app-structure conventions, you can
+tailor argocheck to them from your own Python package, without forking it —
+see [EXTENDING.md](EXTENDING.md).
+
 ## Running the tests
 
 ```bash

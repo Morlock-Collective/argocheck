@@ -12,23 +12,25 @@ from .help_content import HELP_TOPICS
 from .helm import HelmError, check_helm
 from .models import AppNode
 from .parser import ParseError, load_yaml_file, parse_application
+from .plugins import get_registry
 from .valuetree import ValueTreeError, build_leaf_node, matches_selection, parse_leaves
 from .walker import walk
 
-_GUIDE_TOPIC_IDS = [t["id"] for t in HELP_TOPICS]
+_ALL_GUIDE_TOPICS = HELP_TOPICS + get_registry().help_topics()
+_GUIDE_TOPIC_IDS = [t["id"] for t in _ALL_GUIDE_TOPICS]
 
 
 def _print_guide_and_exit(ctx: click.Context, param: click.Parameter, value: bool) -> None:
     if not value or ctx.resilient_parsing:
         return
-    render_guide(HELP_TOPICS)
+    render_guide(_ALL_GUIDE_TOPICS)
     ctx.exit()
 
 
 def _print_guide_topic_and_exit(ctx: click.Context, param: click.Parameter, value: str | None) -> None:
     if value is None or ctx.resilient_parsing:
         return
-    render_guide(HELP_TOPICS, topic_id=value)
+    render_guide(_ALL_GUIDE_TOPICS, topic_id=value)
     ctx.exit()
 
 

@@ -7,6 +7,15 @@
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <link rel="stylesheet" href="/static/style.css">
   <link rel="stylesheet" href="/static/github-dark.min.css">
+  <script>
+    // Plugin registration queue (see argocheck.plugins / EXTENDING.md).
+    // Order-independent: a plugin script can call this before or after
+    // app.js has built the real registry and drained the queue.
+    window.argocheckPlugin = function (fn) {
+      if (window.__argocheckRegistry) fn(window.__argocheckRegistry);
+      else (window.argocheckPluginQueue = window.argocheckPluginQueue || []).push(fn);
+    };
+  </script>
 </head>
 <body>
   <div id="app"></div>

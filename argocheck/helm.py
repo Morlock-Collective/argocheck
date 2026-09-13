@@ -10,6 +10,7 @@ from typing import Any
 import yaml
 
 from .models import HelmSource
+from .plugins import HelmContext, get_registry
 
 
 class HelmError(Exception):
@@ -104,7 +105,11 @@ def build_template_cmd(
             "--set", "ARGOCD_APP_SOURCE_TARGET_REVISION=HEAD",
         ]
 
-    return cmd
+    context = HelmContext(
+        chart_path=chart_path, release_name=release_name, namespace=namespace,
+        tmp_dir=tmp_dir, argocd_env=argocd_env,
+    )
+    return get_registry().build_helm_command(cmd, source, context)
 
 
 def run_template(

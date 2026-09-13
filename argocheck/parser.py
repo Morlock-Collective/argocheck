@@ -7,6 +7,7 @@ from typing import Any
 import yaml
 
 from .models import AppNode, HelmParameter, HelmSource
+from .plugins import get_registry
 
 
 class ParseError(Exception):
@@ -31,6 +32,8 @@ def load_yaml_file(path: Path) -> dict[str, Any]:
 
 def parse_application(doc: dict[str, Any]) -> AppNode:
     """Parse a raw Application manifest dict into an AppNode."""
+    doc = get_registry().transform_application(doc)
+
     kind = doc.get("kind", "")
     if kind != "Application":
         raise ParseError(f"Expected kind: Application, got: {kind!r}")

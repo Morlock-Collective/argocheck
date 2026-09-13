@@ -63,6 +63,10 @@ class AppNode:
     # Resolved chart directory of the primary (first) chart source
     chart_dir: Path | None = None
     error: Exception | None = None
+    # Free-form bucket for plugin-attached data (see argocheck.plugins),
+    # written by ArgocheckPlugin.after_walk and serialized to the frontend.
+    # Unused by argocheck itself.
+    extra: dict[str, Any] = field(default_factory=dict)
 
     @property
     def source(self) -> HelmSource:

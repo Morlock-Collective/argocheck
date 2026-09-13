@@ -9,6 +9,7 @@ import yaml
 from .helm import HelmError, run_template
 from .models import AppNode, HelmSource
 from .parser import ParseError, parse_application
+from .plugins import get_registry
 from .resolver import ResolveError, resolve_ref_map, resolve_source
 
 
@@ -74,6 +75,30 @@ def walk(
     _parent_chart_dir: Path | None = None,
 ) -> AppNode:
     """Recursively resolve, render, and populate an AppNode tree."""
+    node = _walk(
+        node, tmp_dir,
+        argocd_env=argocd_env, max_depth=max_depth,
+        ignore_target_revision=ignore_target_revision,
+        _depth=_depth, _visited=_visited, _parent_chart_dir=_parent_chart_dir,
+    )
+    # Post-order: a node's children (each already run through this same
+    # wrapper) are hooked before their parent, once per node, on every path
+    # (success or error) since _walk always returns the node either way.
+    get_registry().after_walk(node)
+    return node
+
+
+def _walk(
+    node: AppNode,
+    tmp_dir: Path,
+    *,
+    argocd_env: bool = False,
+    max_depth: int = 10,
+    ignore_target_revision: bool = False,
+    _depth: int = 0,
+    _visited: set[str] | None = None,
+    _parent_chart_dir: Path | None = None,
+) -> AppNode:
     if _visited is None:
         _visited = set()
 

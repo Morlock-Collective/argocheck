@@ -12,7 +12,7 @@ from typing import Any
 import uvicorn
 import yaml
 from fastapi import FastAPI, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -21,13 +21,12 @@ from argocheck.help_content import HELP_TOPICS
 from argocheck.helm import HelmError, check_helm
 from argocheck.models import AppNode, HelmSource
 from argocheck.parser import ParseError, load_yaml_file, parse_application
+from argocheck.plugins import PluginRegistry, get_registry
 from argocheck.valuetree import ValueTreeError, build_leaf_node, parse_leaves
 from argocheck.walker import walk
 
 _STATIC = Path(__file__).parent / "static"
 _EXECUTOR = ThreadPoolExecutor(max_workers=2)
-
-app = FastAPI(title="argocheck", docs_url=None, redoc_url=None)
 
 
 # ── Serialisation ─────────────────────────────────────────────────────────────
@@ -215,86 +214,113 @@ def _do_render_with_env_map(
     return {"ok": True, "trees": trees, "error": None, "valueTree": True, "leaves": all_paths}
 
 
-# ── API routes ────────────────────────────────────────────────────────────────
-
-@app.post("/api/render")
-async def api_render(req: RenderRequest) -> dict[str, Any]:
-    _recents.add(str(Path(req.path).resolve()))
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(_EXECUTOR, _do_render, req)
-
-
-@app.get("/api/recents")
-def api_recents() -> list[str]:
-    return _recents.load()
-
-
-@app.delete("/api/recents")
-def api_delete_recent(path: str = Query(...)) -> dict[str, bool]:
-    _recents.remove(path)
-    return {"ok": True}
-
-
-@app.get("/api/help")
-def api_help() -> dict[str, Any]:
-    return {"topics": HELP_TOPICS}
-
-
-@app.get("/api/version")
-def api_version() -> dict[str, str]:
-    return {"version": _pkg_version("argocheck")}
-
-
 class SaveEnvMapRequest(BaseModel):
     path: str
     content: str
 
 
-@app.post("/api/save-env-map")
-def api_save_env_map(req: SaveEnvMapRequest) -> dict[str, Any]:
-    path = Path(req.path).expanduser()
-    if not path.is_absolute():
-        return {"ok": False, "error": f"Not an absolute path: {req.path}"}
-    if path.is_dir():
-        return {"ok": False, "error": f"{path} is a directory."}
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(req.content)
-    except OSError as e:
-        return {"ok": False, "error": str(e)}
-    return {"ok": True, "path": str(path)}
+# ── App factory ───────────────────────────────────────────────────────────────
+
+def create_app(registry: PluginRegistry | None = None) -> FastAPI:
+    """Build the argocheck FastAPI app. `registry` defaults to the
+    process-wide plugin registry (see argocheck.plugins) — pass one
+    explicitly only to test a specific set of plugins in isolation."""
+    registry = registry if registry is not None else get_registry()
+    app = FastAPI(title="argocheck", docs_url=None, redoc_url=None)
+
+    # ── API routes ────────────────────────────────────────────────────────
+
+    @app.post("/api/render")
+    async def api_render(req: RenderRequest) -> dict[str, Any]:
+        _recents.add(str(Path(req.path).resolve()))
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(_EXECUTOR, _do_render, req)
+
+    @app.get("/api/recents")
+    def api_recents() -> list[str]:
+        return _recents.load()
+
+    @app.delete("/api/recents")
+    def api_delete_recent(path: str = Query(...)) -> dict[str, bool]:
+        _recents.remove(path)
+        return {"ok": True}
+
+    @app.get("/api/help")
+    def api_help() -> dict[str, Any]:
+        return {"topics": HELP_TOPICS + registry.help_topics()}
+
+    @app.get("/api/version")
+    def api_version() -> dict[str, str]:
+        return {"version": _pkg_version("argocheck")}
+
+    @app.post("/api/save-env-map")
+    def api_save_env_map(req: SaveEnvMapRequest) -> dict[str, Any]:
+        path = Path(req.path).expanduser()
+        if not path.is_absolute():
+            return {"ok": False, "error": f"Not an absolute path: {req.path}"}
+        if path.is_dir():
+            return {"ok": False, "error": f"{path} is a directory."}
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(req.content)
+        except OSError as e:
+            return {"ok": False, "error": str(e)}
+        return {"ok": True, "path": str(path)}
+
+    @app.get("/api/browse")
+    def api_browse(path: str = Query(default="~")) -> dict[str, Any]:
+        p = Path(path).expanduser().resolve()
+        if not p.is_dir():
+            p = p.parent
+        try:
+            entries = sorted(p.iterdir(), key=lambda e: (e.is_file(), e.name.lower()))
+        except PermissionError:
+            return {"error": "Permission denied", "current": str(p),
+                    "parent": str(p.parent) if p.parent != p else None,
+                    "dirs": [], "files": [], "hasChart": False}
+        dirs = [str(e) for e in entries if e.is_dir() and not e.name.startswith(".")]
+        files = [str(e) for e in entries if e.is_file() and e.suffix in (".yaml", ".yml")]
+        return {
+            "current": str(p),
+            "parent": str(p.parent) if p.parent != p else None,
+            "dirs": dirs,
+            "files": files,
+            "hasChart": (p / "Chart.yaml").exists(),
+            "error": None,
+        }
+
+    # ── Static file routes ────────────────────────────────────────────────
+
+    plugin_assets = registry.frontend_assets()
+
+    @app.get("/")
+    def serve_index() -> HTMLResponse:
+        html = (_STATIC / "index.html").read_text()
+        scripts = "".join(
+            f'<script src="/plugin-static/{name}/{path.name}"></script>\n'
+            for name, path in plugin_assets
+        )
+        return HTMLResponse(html.replace("</body>", f"{scripts}</body>"))
+
+    app.mount("/static", StaticFiles(directory=_STATIC), name="static")
+
+    # Mount each plugin asset's parent directory once (several assets from
+    # the same plugin share one mount), under a path namespaced by plugin
+    # name so two plugins' files can never collide.
+    mounted: dict[str, Path] = {}
+    for name, path in plugin_assets:
+        mounted.setdefault(name, path.parent)
+    for name, directory in mounted.items():
+        app.mount(f"/plugin-static/{name}", StaticFiles(directory=directory), name=f"plugin-static-{name}")
+
+    # ── Plugin-registered routes/mounts ───────────────────────────────────
+
+    registry.register_routes(app)
+
+    return app
 
 
-@app.get("/api/browse")
-def api_browse(path: str = Query(default="~")) -> dict[str, Any]:
-    p = Path(path).expanduser().resolve()
-    if not p.is_dir():
-        p = p.parent
-    try:
-        entries = sorted(p.iterdir(), key=lambda e: (e.is_file(), e.name.lower()))
-    except PermissionError:
-        return {"error": "Permission denied", "current": str(p),
-                "parent": str(p.parent) if p.parent != p else None,
-                "dirs": [], "files": [], "hasChart": False}
-    dirs = [str(e) for e in entries if e.is_dir() and not e.name.startswith(".")]
-    files = [str(e) for e in entries if e.is_file() and e.suffix in (".yaml", ".yml")]
-    return {
-        "current": str(p),
-        "parent": str(p.parent) if p.parent != p else None,
-        "dirs": dirs,
-        "files": files,
-        "hasChart": (p / "Chart.yaml").exists(),
-        "error": None,
-    }
-
-
-# ── Static file routes ────────────────────────────────────────────────────────
-
-@app.get("/")
-def serve_index() -> FileResponse:
-    return FileResponse(_STATIC / "index.html")
-
-app.mount("/static", StaticFiles(directory=_STATIC), name="static")
+app = create_app()
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
