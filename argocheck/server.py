@@ -73,6 +73,7 @@ def _ser_node(node: AppNode, tmp_dir: Path) -> dict[str, Any]:
         "appManifest": node.app_manifest,
         "chartDir": str(chart_dir) if durable_chart_dir else None,
         "error": _ser_error(node.error),
+        "extra": node.extra,
         "children": [_ser_node(c, tmp_dir) for c in node.children],
     }
 
