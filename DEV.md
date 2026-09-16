@@ -41,11 +41,19 @@ package, verifies the tag matches `pyproject.toml`'s `version` and that
 `CHANGELOG.md` has a matching `## [X.Y.Z]` section, then publishes to PyPI and
 creates a GitHub release with that changelog section as the release notes.
 
+`scripts/prepare_release.sh` does this: it turns `CHANGELOG.md`'s
+`## [Unreleased]` section into `## [X.Y.Z] - YYYY-MM-DD` for whatever version
+`pyproject.toml` already has, commits that as `vX.Y.Z`, tags it, then bumps
+`pyproject.toml`'s minor version and adds a fresh `## [Unreleased]` section
+for the next cycle (left uncommitted, for review). It refuses to run with
+uncommitted changes or an empty Unreleased section. It never pushes.
+
 Release checklist:
 
-1. Bump `version` in `pyproject.toml`.
-2. Add a `## [X.Y.Z] - YYYY-MM-DD` section to `CHANGELOG.md`.
-3. Commit, then tag that commit `vX.Y.Z` and push the tag.
+1. Run `scripts/prepare_release.sh`.
+2. Review and commit the next-version bump it leaves uncommitted (e.g.
+   `git commit -am "Bump version for next release"`).
+3. `git push && git push origin vX.Y.Z`.
 
 ### One-time setup (credentials)
 
