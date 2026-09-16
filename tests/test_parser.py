@@ -2,7 +2,7 @@
 import pytest
 import yaml
 
-from argocheck.parser import ParseError, parse_application, parse_all_applications
+from argocheck.parser import ParseError, load_yaml_file, parse_application, parse_all_applications
 
 
 MINIMAL_APP = """
@@ -144,3 +144,35 @@ def test_parse_dollar_ref_value_file_allowed_in_multisource():
     doc = yaml.safe_load(MULTISOURCE_APP)
     node = parse_application(doc)
     assert node.sources[0].value_files == ["$values/prod.yaml"]
+
+
+def test_load_yaml_file_reads_utf8_content(tmp_path):
+    """A non-ASCII value (e.g. in metadata.name) must round-trip — the file
+    is read as UTF-8 explicitly, not whatever the platform locale defaults
+    to."""
+    manifest = tmp_path / "app.yaml"
+    manifest.write_text(
+        "apiVersion: argoproj.io/v1alpha1\n"
+        "kind: Application\n"
+        "metadata:\n"
+        "  name: café-app\n"
+        "  namespace: argocd\n"
+        "spec:\n"
+        "  source:\n"
+        "    repoURL: ./chart\n"
+        "  project: default\n",
+        encoding="utf-8",
+    )
+    doc = load_yaml_file(manifest)
+    assert doc["metadata"]["name"] == "café-app"
+
+
+def test_load_yaml_file_rejects_non_utf8_content_clearly(tmp_path):
+    """A file that isn't valid UTF-8 (e.g. Latin-1 with a byte sequence
+    that's invalid UTF-8) must raise a clear ParseError, not an unhandled
+    UnicodeDecodeError."""
+    manifest = tmp_path / "app.yaml"
+    manifest.write_bytes("name: café\n".encode("latin-1"))  # 0xE9 is invalid UTF-8 alone
+
+    with pytest.raises(ParseError, match="not valid UTF-8"):
+        load_yaml_file(manifest)

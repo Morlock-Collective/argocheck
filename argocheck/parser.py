@@ -16,9 +16,11 @@ class ParseError(Exception):
 
 def load_yaml_file(path: Path) -> dict[str, Any]:
     try:
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
     except OSError as e:
         raise ParseError(f"Cannot read {path}: {e}") from e
+    except UnicodeDecodeError as e:
+        raise ParseError(f"{path} is not valid UTF-8: {e}") from e
 
     try:
         doc = yaml.safe_load(text)

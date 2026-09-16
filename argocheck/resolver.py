@@ -140,7 +140,7 @@ def _resolve_local_git(repo_path: Path, revision: str, tmp_dir: Path) -> Path:
     try:
         target_sha = subprocess.run(
             ["git", "-C", str(repo_path), "rev-parse", revision],
-            capture_output=True, text=True, check=True,
+            capture_output=True, text=True, encoding="utf-8", check=True,
         ).stdout.strip()
     except subprocess.CalledProcessError as e:
         raise ResolveError(
@@ -153,7 +153,7 @@ def _resolve_local_git(repo_path: Path, revision: str, tmp_dir: Path) -> Path:
         try:
             cached_sha = subprocess.run(
                 ["git", "-C", str(dest), "rev-parse", "HEAD"],
-                capture_output=True, text=True, check=True,
+                capture_output=True, text=True, encoding="utf-8", check=True,
             ).stdout.strip()
         except subprocess.CalledProcessError:
             # Corrupt or partial cache (e.g. an interrupted previous run) — discard
@@ -167,7 +167,7 @@ def _resolve_local_git(repo_path: Path, revision: str, tmp_dir: Path) -> Path:
     try:
         subprocess.run(
             ["git", "clone", "--quiet", str(repo_path), str(dest)],
-            capture_output=True, text=True, check=True,
+            capture_output=True, text=True, encoding="utf-8", check=True,
         )
     except subprocess.CalledProcessError as e:
         raise ResolveError(
@@ -177,7 +177,7 @@ def _resolve_local_git(repo_path: Path, revision: str, tmp_dir: Path) -> Path:
     try:
         subprocess.run(
             ["git", "-C", str(dest), "checkout", "--quiet", "--detach", target_sha],
-            capture_output=True, text=True, check=True,
+            capture_output=True, text=True, encoding="utf-8", check=True,
         )
     except subprocess.CalledProcessError as e:
         shutil.rmtree(dest)
@@ -234,7 +234,7 @@ def _resolve_git(source: HelmSource, tmp_dir: Path, require_chart: bool, ignore_
         cmd += [repo_url, str(clone_dir)]
 
         try:
-            subprocess.run(cmd, capture_output=True, text=True, check=True)
+            subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", check=True)
         except FileNotFoundError:
             raise ResolveError("git binary not found. Install git or use a local chart path.")
         except subprocess.CalledProcessError as e:

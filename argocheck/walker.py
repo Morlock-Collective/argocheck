@@ -28,9 +28,11 @@ def _read_plain_manifests(directory: Path) -> list[dict[str, Any]]:
     )
     for yaml_file in yaml_files:
         try:
-            text = yaml_file.read_text()
+            text = yaml_file.read_text(encoding="utf-8")
         except OSError as e:
             raise RuntimeError(f"Cannot read {yaml_file}: {e}") from e
+        except UnicodeDecodeError as e:
+            raise RuntimeError(f"{yaml_file} is not valid UTF-8: {e}") from e
         try:
             for doc in yaml.safe_load_all(text):
                 if isinstance(doc, dict):

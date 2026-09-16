@@ -25,7 +25,7 @@ def check_helm() -> str:
     try:
         result = subprocess.run(
             ["helm", "version", "--short"],
-            capture_output=True, text=True, check=True,
+            capture_output=True, text=True, encoding="utf-8", check=True,
         )
         return result.stdout.strip()
     except FileNotFoundError:
@@ -75,13 +75,13 @@ def build_template_cmd(
     # Inline values string → temp file
     if source.values:
         tmp_vals = tmp_dir / f"{release_name}-values.yaml"
-        tmp_vals.write_text(source.values)
+        tmp_vals.write_text(source.values, encoding="utf-8")
         cmd += ["-f", str(tmp_vals)]
 
     # valuesObject → temp file (applied after values, higher precedence)
     if source.values_object:
         tmp_obj = tmp_dir / f"{release_name}-values-object.yaml"
-        tmp_obj.write_text(yaml.dump(source.values_object))
+        tmp_obj.write_text(yaml.dump(source.values_object), encoding="utf-8")
         cmd += ["-f", str(tmp_obj)]
 
     # Parameters → --set / --set-string / --set-json
@@ -129,7 +129,7 @@ def run_template(
     )
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", check=True)
     except subprocess.CalledProcessError as e:
         raise HelmError(
             f"helm template failed for release {release_name!r}",
@@ -147,7 +147,7 @@ def run_template(
 def helm_repo_add(repo_name: str, repo_url: str) -> None:
     cmd = ["helm", "repo", "add", repo_name, repo_url]
     try:
-        subprocess.run(cmd, capture_output=True, text=True, check=True)
+        subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", check=True)
     except subprocess.CalledProcessError as e:
         raise HelmError(f"helm repo add failed: {e.stderr}", cmd=cmd, stderr=e.stderr)
 
@@ -155,7 +155,7 @@ def helm_repo_add(repo_name: str, repo_url: str) -> None:
 def helm_repo_update() -> None:
     cmd = ["helm", "repo", "update"]
     try:
-        subprocess.run(cmd, capture_output=True, text=True, check=True)
+        subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", check=True)
     except subprocess.CalledProcessError as e:
         raise HelmError(f"helm repo update failed: {e.stderr}", cmd=cmd, stderr=e.stderr)
 
@@ -167,7 +167,7 @@ def helm_pull(chart_ref: str, version: str | None, dest: Path, untar: bool = Tru
     if untar:
         cmd.append("--untar")
     try:
-        subprocess.run(cmd, capture_output=True, text=True, check=True)
+        subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", check=True)
     except subprocess.CalledProcessError as e:
         raise HelmError(f"helm pull failed: {e.stderr}", cmd=cmd, stderr=e.stderr)
 
@@ -180,7 +180,7 @@ def _read_helm_repos() -> dict[str, str]:
     """
     try:
         result = subprocess.run(
-            ["helm", "env"], capture_output=True, text=True, check=True
+            ["helm", "env"], capture_output=True, text=True, encoding="utf-8", check=True
         )
     except (FileNotFoundError, subprocess.CalledProcessError):
         return {}
@@ -197,9 +197,9 @@ def _read_helm_repos() -> dict[str, str]:
 
     repos_file = config_home / "repositories.yaml"
     try:
-        data = yaml.safe_load(repos_file.read_text()) or {}
+        data = yaml.safe_load(repos_file.read_text(encoding="utf-8")) or {}
         return {r["name"]: r["url"] for r in (data.get("repositories") or []) if "name" in r}
-    except (FileNotFoundError, yaml.YAMLError, KeyError):
+    except (FileNotFoundError, UnicodeDecodeError, yaml.YAMLError, KeyError):
         return {}
 
 
@@ -262,8 +262,11 @@ def _maybe_update_dependencies(chart_path: Path) -> None:
     if not chart_yaml.exists():
         return
 
-    with open(chart_yaml) as f:
-        chart_meta = yaml.safe_load(f) or {}
+    try:
+        with open(chart_yaml, encoding="utf-8") as f:
+            chart_meta = yaml.safe_load(f) or {}
+    except (OSError, UnicodeDecodeError, yaml.YAMLError) as e:
+        raise HelmError(f"Cannot read {chart_yaml}: {e}", cmd=[])
 
     dependencies: list[dict[str, Any]] = chart_meta.get("dependencies") or []
     if not dependencies:
@@ -276,7 +279,7 @@ def _maybe_update_dependencies(chart_path: Path) -> None:
 
     cmd = ["helm", "dependency", "update", str(chart_path)]
     try:
-        subprocess.run(cmd, capture_output=True, text=True, check=True)
+        subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", check=True)
     except subprocess.CalledProcessError as e:
         raise HelmError(
             f"helm dependency update failed for {chart_path}",

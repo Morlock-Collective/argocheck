@@ -101,9 +101,9 @@ def _chart_root_node(chart_dir: Path, values_override: str | None) -> AppNode:
     """Build a pseudo-root AppNode for a bare Helm chart directory."""
     name = chart_dir.name
     try:
-        chart_meta = yaml.safe_load((chart_dir / "Chart.yaml").read_text()) or {}
+        chart_meta = yaml.safe_load((chart_dir / "Chart.yaml").read_text(encoding="utf-8")) or {}
         name = chart_meta.get("name") or name
-    except (OSError, yaml.YAMLError):
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
         pass
 
     source = HelmSource(repo_url=str(chart_dir), values=values_override or None)
@@ -263,7 +263,7 @@ def create_app(registry: PluginRegistry | None = None) -> FastAPI:
             return {"ok": False, "error": f"{path} is a directory."}
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(req.content)
+            path.write_text(req.content, encoding="utf-8")
         except OSError as e:
             return {"ok": False, "error": str(e)}
         return {"ok": True, "path": str(path)}
@@ -296,7 +296,7 @@ def create_app(registry: PluginRegistry | None = None) -> FastAPI:
 
     @app.get("/")
     def serve_index() -> HTMLResponse:
-        html = (_STATIC / "index.html").read_text()
+        html = (_STATIC / "index.html").read_text(encoding="utf-8")
         scripts = "".join(
             f'<script src="/plugin-static/{name}/{path.name}"></script>\n'
             for name, path in plugin_assets

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 - Renamed "Compact View" to "Application Resources"
+- argocheck now treats every file it reads or writes, and every `helm`/`git` subprocess call's output, as UTF-8 explicitly. It no longer relies on the platform's default locale encoding. A file that isn't valid UTF-8 now fails with a clear error, instead of misdecoding silently or crashing with a raw traceback.
 
 ## [0.3.2] - 2026-09-13
 

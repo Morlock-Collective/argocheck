@@ -119,6 +119,25 @@ def test_walk_plain_manifests():
     assert len(result.manifests) == 2
 
 
+def test_walk_plain_manifests_rejects_non_utf8_file_clearly():
+    """A YAML file in a plain-manifest directory that isn't valid UTF-8 must
+    surface as this app's error, not crash the whole walk with an unhandled
+    UnicodeDecodeError."""
+    doc = load_yaml_file(FIXTURES / "root-app-plain.yaml")
+    node = parse_application(doc)
+
+    with tempfile.TemporaryDirectory() as source_dir:
+        source_path = Path(source_dir)
+        (source_path / "bad.yaml").write_bytes("name: café\n".encode("latin-1"))
+        node.sources[0].repo_url = str(source_path)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            result = walk(node, tmp_dir=Path(tmp))
+
+    assert result.error is not None
+    assert "not valid UTF-8" in str(result.error)
+
+
 def test_walk_multi_source_with_ref_values():
     """Multi-source app: one chart source + one ref source providing a values file."""
     doc = load_yaml_file(FIXTURES / "root-app-multisource.yaml")

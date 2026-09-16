@@ -10,10 +10,10 @@ _MAX = 10
 
 def load() -> list[str]:
     try:
-        data = json.loads(_STORE.read_text())
+        data = json.loads(_STORE.read_text(encoding="utf-8"))
         # Silently drop paths that no longer exist on disk
         return [p for p in data if isinstance(p, str) and Path(p).exists()]
-    except (FileNotFoundError, json.JSONDecodeError):
+    except (FileNotFoundError, UnicodeDecodeError, json.JSONDecodeError):
         return []
 
 
@@ -23,10 +23,10 @@ def add(path: str) -> None:
     recents.insert(0, path)
     recents = recents[:_MAX]
     _STORE.parent.mkdir(parents=True, exist_ok=True)
-    _STORE.write_text(json.dumps(recents, indent=2))
+    _STORE.write_text(json.dumps(recents, indent=2), encoding="utf-8")
 
 
 def remove(path: str) -> None:
     recents = [p for p in load() if p != path]
     _STORE.parent.mkdir(parents=True, exist_ok=True)
-    _STORE.write_text(json.dumps(recents, indent=2))
+    _STORE.write_text(json.dumps(recents, indent=2), encoding="utf-8")
