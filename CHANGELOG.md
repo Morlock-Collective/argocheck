@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - A warning when an app's source resolves via a local filesystem `repoURL` (relative, absolute, or `file://`). This is never valid in real ArgoCD, so a manifest that renders fine here would not function if committed as-is. The CLI prints a summary line naming every affected app. The web interface shows a banner on that app's detail panel. This doesn't apply when you point argocheck directly at a bare chart directory — no Application manifest exists there to warn about.
 - A plugin system for tailoring argocheck to an organization's own chart/app-structure conventions from a separate Python package, with no fork required. On the Python side, plugins hook into source resolution, Application parsing, the Helm command, and post-render inspection. In the web interface, they can add sidebar sections, render interceptors, and guide topics. See `EXTENDING.md`.
 
+### Changed
+- Renamed "Compact View" to "Application Resources"
+
 ## [0.3.2] - 2026-09-13
 
 ### Changed

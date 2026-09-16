@@ -525,7 +525,7 @@ const AppDetail = {
         <div class="detail-actions">
           <button v-if="node.appManifest" class="btn btn-sm"
                   @click="showYaml = !showYaml">
-            {{ showYaml ? "Compact view" : "Application YAML" }}
+            {{ showYaml ? "Application Resources" : "Application YAML" }}
           </button>
           <span class="status-badge" :class="node.error ? 'err' : 'ok'">
             {{ node.error ? "❌ Failed" : "✅ OK" }}
@@ -536,7 +536,7 @@ const AppDetail = {
       <!-- Application YAML view -->
       <yaml-block v-if="showYaml && node.appManifest" :content="node.appManifest"></yaml-block>
 
-      <!-- Compact view -->
+      <!-- Resource view -->
       <template v-else>
 
         <!-- Error -->
