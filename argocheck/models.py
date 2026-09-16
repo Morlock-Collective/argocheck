@@ -37,6 +37,17 @@ class HelmSource:
         """True when this source only provides values files (not a chart to render)."""
         return bool(self.ref) and not self.chart and not self.path
 
+    @property
+    def is_local_path(self) -> bool:
+        """True when repoURL is a local filesystem path (relative, absolute,
+        or file://) rather than a real git/Helm-repo/OCI remote. argocheck
+        supports this as a local-development convenience, but it's never
+        valid in real ArgoCD — used to warn, not to block."""
+        url = self.repo_url
+        if url.startswith("file://"):
+            url = url[len("file://"):]
+        return url.startswith("/") or url.startswith("./") or url.startswith("../")
+
 
 @dataclass
 class AppNode:

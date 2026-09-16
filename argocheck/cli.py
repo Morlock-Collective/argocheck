@@ -7,7 +7,7 @@ from pathlib import Path
 
 import click
 
-from .display import print_error, render_app_yaml, render_guide, render_tree
+from .display import print_error, print_local_path_warning, render_app_yaml, render_guide, render_tree
 from .help_content import HELP_TOPICS
 from .helm import HelmError, check_helm
 from .models import AppNode
@@ -185,6 +185,10 @@ def main(
         for r in roots:
             render_tree(r, expand=set(expand_apps))
 
+    local_path_apps = sorted({name for r in roots for name in _local_path_app_names(r)})
+    if local_path_apps:
+        print_local_path_warning(local_path_apps)
+
     # Exit non-zero if any node has an error
     if any(_has_error(r) for r in roots):
         sys.exit(1)
@@ -194,6 +198,19 @@ def _has_error(node: AppNode) -> bool:
     if node.error:
         return True
     return any(_has_error(c) for c in node.children)
+
+
+def _local_path_app_names(node: AppNode) -> set[str]:
+    """Names of every app in this subtree with at least one source that
+    resolves via a local filesystem repoURL (see HelmSource.is_local_path).
+    Skips a synthetic root (app_manifest is None) — the CLI never renders a
+    bare chart directory without an Application manifest, but a plugin
+    could build one, and there's nothing to "commit" there regardless."""
+    has_local = node.app_manifest is not None and any(s.is_local_path for s in node.sources)
+    names = {node.name} if has_local else set()
+    for child in node.children:
+        names |= _local_path_app_names(child)
+    return names
 
 
 if __name__ == "__main__":

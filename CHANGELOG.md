@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- A warning when an app's source resolves via a local filesystem `repoURL` (relative, absolute, or `file://`). This is never valid in real ArgoCD, so a manifest that renders fine here would not function if committed as-is. The CLI prints a summary line naming every affected app. The web interface shows a banner on that app's detail panel. This doesn't apply when you point argocheck directly at a bare chart directory — no Application manifest exists there to warn about.
+
 ## [0.3.2] - 2026-09-13
 
 ### Changed

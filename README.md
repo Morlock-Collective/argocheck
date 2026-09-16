@@ -341,6 +341,12 @@ source:
 `targetRevision: HEAD` (the default) always uses the working tree directly,
 including uncommitted changes.
 
+A local filesystem `repoURL` is never valid in real ArgoCD — it always needs
+an actual git/Helm-repo/OCI remote there. argocheck resolves it anyway, as a
+local-development convenience, but shows a warning. 
+The CLI prints a summary line naming every affected app. The web interface shows 
+a banner on that app's detail panel.
+
 If `repoURL` points at a directory that is itself a git repo, and
 `targetRevision` is anything other than `HEAD`, argocheck checks out that
 revision (branch, tag, or commit) into a scratch clone instead — this

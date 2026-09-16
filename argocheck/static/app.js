@@ -6,6 +6,15 @@ const { createApp, ref, computed, watch, onMounted, onUnmounted, nextTick } = Vu
 function basename(p) { return p.split("/").pop() || p; }
 function dirname(p)  { const parts = p.split("/"); parts.pop(); return parts.join("/") || "/"; }
 
+// Mirrors HelmSource.is_local_path (argocheck/models.py): true when repoURL
+// is a local filesystem path (relative, absolute, or file://) rather than a
+// real git/Helm-repo/OCI remote. Never valid in real ArgoCD — used to warn,
+// not to block.
+function isLocalRepoUrl(url) {
+  const stripped = url.startsWith("file://") ? url.slice("file://".length) : url;
+  return stripped.startsWith("/") || stripped.startsWith("./") || stripped.startsWith("../");
+}
+
 // Each entry carries a `path` (names from root to this node) and a `pathKey`
 // (path joined by "/"), which uniquely identify a node even when multiple
 // leaves share the same name in different branches of the tree.
@@ -475,10 +484,16 @@ const AppDetail = {
       if (src.releaseName) rows.push(["releaseName", src.releaseName]);
       return rows;
     }
+    // appManifest is null only for a synthetic root (the web interface
+    // pointed directly at a bare chart directory, no Application manifest
+    // involved) — nothing there to warn about "committing this manifest".
+    const hasLocalPathSource = computed(() =>
+      !!props.node.appManifest && (props.node.sources || []).some((s) => isLocalRepoUrl(s.repoURL))
+    );
     function childPathKey(child) {
       return [...props.nodePath, child.name].join("/");
     }
-    return { showYaml, sourceOpen, sourceLabel, sourceRows, childPathKey };
+    return { showYaml, sourceOpen, sourceLabel, sourceRows, hasLocalPathSource, childPathKey };
   },
   template: `
     <div>
@@ -519,6 +534,13 @@ const AppDetail = {
         </div>
 
         <template v-else>
+          <!-- Local-path repoURL warning -->
+          <div v-if="hasLocalPathSource" class="local-path-warning">
+            ⚠ This app's source resolves via a local filesystem repoURL.
+            That only works in argocheck — real ArgoCD requires an actual
+            git/Helm-repo/OCI remote.
+          </div>
+
           <!-- Sources (collapsible) -->
           <div class="collapsible">
             <button class="collapsible-header" @click="sourceOpen = !sourceOpen">

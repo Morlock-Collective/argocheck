@@ -114,6 +114,19 @@ def print_error(message: str) -> None:
     console.print(f"[bold red]Error:[/bold red] {message}")
 
 
+def print_local_path_warning(app_names: list[str]) -> None:
+    """One summary warning naming every app whose source resolved via a
+    local filesystem repoURL — never valid in real ArgoCD, so a manifest
+    that renders fine here would fail if committed and applied as-is."""
+    verb = "resolves" if len(app_names) == 1 else "resolve"
+    apps = ", ".join(app_names)
+    console.print(
+        f"[bold yellow]Warning:[/bold yellow] {apps} {verb} a source via a "
+        "local filesystem repoURL. This only works in argocheck — real "
+        "ArgoCD requires an actual git/Helm-repo/OCI remote."
+    )
+
+
 def _render_help_block(block: dict[str, Any]) -> None:
     kind = block["type"]
     if kind == "p":
