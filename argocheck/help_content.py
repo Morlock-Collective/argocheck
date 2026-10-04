@@ -187,6 +187,15 @@ HELP_TOPICS: list[dict[str, Any]] = [
                 "Show identical toggles whether unchanged apps/resources are "
                 "hidden. Diff style switches between a minimal "
                 "(context-collapsed) and full-context line diff."},
+            {"type": "p", "text":
+                "Applications, next to the other display controls, excludes "
+                "each matched pair's own Application diff from the view. "
+                "Include Applications (the default) always shows it. Ignore "
+                "differing Applications excludes it only where it would show "
+                "Differs — a pair with no other differences then reads as "
+                "Identical overall. Ignore all Applications excludes it "
+                "unconditionally, whether it differs or not. None of this "
+                "affects an app that's Only in A or Only in B."},
         ],
     },
 ]

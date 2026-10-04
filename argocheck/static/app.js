@@ -241,7 +241,19 @@ function diffAppManifest(name, manifestA, manifestB) {
 
 // Diff two subtrees: match apps by relative path under each root, then diff
 // each matched pair's resources.
-function diffTrees(flat, entryA, entryB) {
+//
+// appHandling controls each matched pair's own Application-manifest diff
+// entry (never apps that only exist on one side — there's no pair there to
+// begin with):
+//   "include"          — always include it (the default, original behavior).
+//   "ignore-differing"  — omit it when it would show "changed". A pair whose
+//                         *only* difference is in the Application manifest
+//                         itself then reads as Identical overall — useful
+//                         since that's very commonly a given (different
+//                         targetRevision/repoURL between branches) and not
+//                         what the user is trying to compare.
+//   "ignore-all"        — never include it, regardless of status.
+function diffTrees(flat, entryA, entryB, appHandling = "include") {
   const mapA = subtreeEntries(flat, entryA);
   const mapB = subtreeEntries(flat, entryB);
   const relPaths = new Set([...mapA.keys(), ...mapB.keys()]);
@@ -251,7 +263,9 @@ function diffTrees(flat, entryA, entryB) {
     if (eA && eB) {
       const resources = diffResources(eA.node.manifests, eB.node.manifests);
       const appDiff = diffAppManifest(eA.node.name ?? eB.node.name, eA.node.appManifest, eB.node.appManifest);
-      if (appDiff) resources.unshift(appDiff);
+      const keepAppDiff = appDiff && appHandling !== "ignore-all" &&
+        !(appHandling === "ignore-differing" && appDiff.status === "changed");
+      if (keepAppDiff) resources.unshift(appDiff);
       const changed = resources.some((r) => r.status !== "identical");
       apps.push({ relPath, status: changed ? "changed" : "identical", resources });
     } else if (eA) {
@@ -950,6 +964,9 @@ const rootApp = createApp({
     const diffB             = ref(null);  // pathKey of "Branch B"
     const diffShowIdentical = ref(false);
     const diffFullContext   = ref(false);
+    // "include" | "ignore-differing" | "ignore-all" — how to handle each
+    // matched app pair's own Application-manifest diff entry.
+    const diffAppHandling   = ref("include");
     const pendingDiff       = ref(null);  // { a, b } pathKeys to apply once the next render completes
 
     // Sidebar section open/closed
@@ -1071,7 +1088,7 @@ const rootApp = createApp({
       const entryA = flat.value.find((e) => e.pathKey === diffA.value);
       const entryB = flat.value.find((e) => e.pathKey === diffB.value);
       if (!entryA || !entryB) return null;
-      return diffTrees(flat.value, entryA, entryB);
+      return diffTrees(flat.value, entryA, entryB, diffAppHandling.value);
     });
     // Doesn't block the diff — just flags a likely-unintentional branch pick.
     const diffWarning = computed(() => {
@@ -1467,7 +1484,7 @@ const rootApp = createApp({
       sidebarWidth, onHandleMouseDown,
       displayMode, expandSeq, collapseSeq, expandAll, collapseAll,
       viewState, staleApp, selectApp, onResourceStateChange, clearNavigation,
-      diffMode, diffA, diffB, diffShowIdentical, diffFullContext, diffOptions, diffResult, diffWarning, swapDiffBranches,
+      diffMode, diffA, diffB, diffShowIdentical, diffFullContext, diffAppHandling, diffOptions, diffResult, diffWarning, swapDiffBranches,
       treeItemActions,
       envMapMode, envMapPath, envMapYaml, envMapEnabled,
       awaitingLeafSelection, isValueTree, leafTreeFlat, leafTreePrefixes, selectedLeafCount,
@@ -1789,6 +1806,15 @@ const rootApp = createApp({
               </div>
               <button class="btn btn-sm" @click="expandAll()" title="Expand every resource">Expand all</button>
               <button class="btn btn-sm" @click="collapseAll()" title="Collapse every resource">Collapse all</button>
+              <template v-if="diffMode">
+                <span class="app-handling-label">Applications</span>
+                <select class="app-handling-select" v-model="diffAppHandling"
+                        title="How to handle each matched app's own Application manifest in the diff">
+                  <option value="include" title="Always show each matched pair's own Application diff.">Include Applications</option>
+                  <option value="ignore-differing" title="Exclude a matched pair's own Application diff only where it would show Differs.">Ignore differing Applications</option>
+                  <option value="ignore-all" title="Exclude every matched pair's own Application diff, whether it differs or not.">Ignore all Applications</option>
+                </select>
+              </template>
             </div>
           </div>
           <template v-if="diffMode">

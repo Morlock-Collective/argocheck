@@ -113,6 +113,14 @@ status: **Identical**, **Differs** (with a line-level diff), **Added**, or
 apps/resources. **Diff style** switches between a minimal (context-collapsed)
 and full-context line diff.
 
+**Applications**, next to the other display controls, excludes each matched
+pair's own Application diff from the view. **Include Applications** (the
+default) always shows it. **Ignore differing Applications** excludes it only
+where it would show Differs — a pair with no other differences then reads as
+Identical overall. **Ignore all Applications** excludes it unconditionally,
+whether it differs or not. None of this affects an app that's Only in A or
+Only in B.
+
 Diff mode compares two subtrees of the same render. It does not fetch or
 render a second revision. To diff two git refs of the same chart, first add
 each ref as a separate sibling app (or child app), each with its own

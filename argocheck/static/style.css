@@ -366,6 +366,31 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
   flex-shrink: 0;
 }
 
+/* Diff-only: how to handle each matched app's own Application-manifest
+   diff. Set off from the always-present display controls by its own
+   divider, matching the DISPLAY label's own treatment. */
+.app-handling-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding-left: 0.6rem;
+  border-left: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.app-handling-select {
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.8rem;
+  font-family: var(--font);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+.app-handling-select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-dim); }
+
 /* ── App detail ──────────────────────────────────────────────────────────── */
 .divider { height: 1px; background: var(--border); margin-bottom: 1.25rem; }
 

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Diff mode's "Applications" option, next to the other display controls, controls how each matched app pair's own Application diff factors in. Choices: Include Applications (default), Ignore differing Applications (drop it when it would show Differs, e.g. two branches that just point at different revisions), or Ignore all Applications. Never affects an app that's Only in A or Only in B.
+
 ### Changed
 - The web interface's local-path `repoURL` warning is now a small ⚠ marker next to the app name, not a banner. Hover it for the full message.
 
