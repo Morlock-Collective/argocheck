@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- The web interface's local-path `repoURL` warning is now a small ⚠ marker next to the app name, not a banner. Hover it for the full message.
+
 ## [0.4.0] - 2026-09-16
 
 ### Added

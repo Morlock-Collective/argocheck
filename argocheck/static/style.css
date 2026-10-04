@@ -312,9 +312,13 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
   padding: 0.6rem 1rem; color: var(--warning); margin-bottom: 1rem; font-size: 0.85rem;
 }
 
-.local-path-warning {
-  background: var(--warning-dim); border: 1px solid var(--warning); border-radius: var(--radius);
-  padding: 0.6rem 1rem; color: var(--warning); margin-bottom: 1rem; font-size: 0.85rem;
+.local-path-marker {
+  display: inline-block;
+  margin-left: 0.3rem;
+  font-size: 0.75em;
+  color: var(--warning);
+  cursor: help;
+  vertical-align: middle;
 }
 
 .diff-mode-banner {

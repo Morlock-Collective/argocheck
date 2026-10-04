@@ -519,7 +519,11 @@ const AppDetail = {
       <!-- Header -->
       <div class="detail-header">
         <div class="detail-title">
-          <h2>{{ node.name }}</h2>
+          <h2>
+            {{ node.name }}
+            <span v-if="hasLocalPathSource" class="local-path-marker"
+                  title="This app's source resolves via a local filesystem repoURL. That only works in argocheck — real ArgoCD requires an actual git/Helm-repo/OCI remote.">⚠</span>
+          </h2>
           <div class="ns">namespace: {{ node.namespace }}</div>
         </div>
         <div class="detail-actions">
@@ -553,13 +557,6 @@ const AppDetail = {
         </div>
 
         <template v-else>
-          <!-- Local-path repoURL warning -->
-          <div v-if="hasLocalPathSource" class="local-path-warning">
-            ⚠ This app's source resolves via a local filesystem repoURL.
-            That only works in argocheck — real ArgoCD requires an actual
-            git/Helm-repo/OCI remote.
-          </div>
-
           <!-- Sources (collapsible) -->
           <div class="collapsible">
             <button class="collapsible-header" @click="sourceOpen = !sourceOpen">
