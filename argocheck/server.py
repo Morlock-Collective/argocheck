@@ -22,11 +22,13 @@ from argocheck.helm import HelmError, check_helm
 from argocheck.models import AppNode, HelmSource
 from argocheck.parser import ParseError, load_yaml_file, parse_application
 from argocheck.plugins import PluginRegistry, get_registry
+from argocheck.resolver import configure_ssh_handling
 from argocheck.valuetree import ValueTreeError, build_leaf_node, parse_leaves
 from argocheck.walker import walk
 
 _STATIC = Path(__file__).parent / "static"
 _EXECUTOR = ThreadPoolExecutor(max_workers=2)
+configure_ssh_handling(interactive=False)
 
 
 # ── Serialisation ─────────────────────────────────────────────────────────────

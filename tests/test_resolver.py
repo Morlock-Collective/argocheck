@@ -2,11 +2,13 @@
 import subprocess
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
+from argocheck import resolver
 from argocheck.models import HelmSource
-from argocheck.resolver import ResolveError, _slug, resolve_source
+from argocheck.resolver import ResolveError, _build_git_ssh_env, _resolve_git, _slug, resolve_source
 
 
 def _git(*args: str, cwd: Path) -> str:
@@ -159,3 +161,89 @@ def test_resolve_local_non_git_directory_ignores_revision():
             resolved = resolve_source(src, tmp_dir=Path(tmp))
 
         assert resolved == plain
+
+
+@pytest.fixture(autouse=True)
+def _reset_ssh_module_state():
+    """Each test starts from the default (non-interactive) mode with no
+    ssh-agent assumed primed, and restores it afterwards so these tests never
+    leak state into other test modules."""
+    saved_interactive = resolver._INTERACTIVE
+    saved_primed = resolver._agent_primed
+    resolver._INTERACTIVE = False
+    resolver._agent_primed = False
+    yield
+    resolver._INTERACTIVE = saved_interactive
+    resolver._agent_primed = saved_primed
+
+
+def test_build_git_ssh_env_non_interactive_uses_batch_mode():
+    resolver.configure_ssh_handling(interactive=False)
+    env = _build_git_ssh_env()
+    assert env["GIT_SSH_COMMAND"] == "ssh -o BatchMode=yes"
+    assert "SSH_ASKPASS" not in env
+
+
+def test_build_git_ssh_env_interactive_uses_askpass():
+    resolver.configure_ssh_handling(interactive=True)
+    env = _build_git_ssh_env()
+    assert env["SSH_ASKPASS_REQUIRE"] == "force"
+    assert env["DISPLAY"]
+    askpass_path = Path(env["SSH_ASKPASS"])
+    assert askpass_path.exists()
+
+
+def test_resolve_git_timeout_raises_resolve_error_without_hanging():
+    resolver.configure_ssh_handling(interactive=False)
+    src = HelmSource(repo_url="git@example.com:org/repo.git", chart="demo")
+
+    with patch(
+        "argocheck.resolver.subprocess.run",
+        side_effect=subprocess.TimeoutExpired(cmd=["git", "clone"], timeout=120),
+    ):
+        with tempfile.TemporaryDirectory() as tmp:
+            with pytest.raises(ResolveError, match="timed out"):
+                _resolve_git(src, Path(tmp), require_chart=True)
+
+
+def test_resolve_git_non_interactive_auth_failure_includes_ssh_add_hint():
+    resolver.configure_ssh_handling(interactive=False)
+    src = HelmSource(repo_url="git@example.com:org/repo.git", chart="demo")
+
+    error = subprocess.CalledProcessError(
+        returncode=128, cmd=["git", "clone"],
+        output="", stderr="Permission denied (publickey).\n",
+    )
+    with patch("argocheck.resolver.subprocess.run", side_effect=error):
+        with tempfile.TemporaryDirectory() as tmp:
+            with pytest.raises(ResolveError, match="ssh-add"):
+                _resolve_git(src, Path(tmp), require_chart=True)
+
+
+def test_resolve_git_https_url_never_touches_ssh_env():
+    """An https:// source must never spawn an ssh-agent or set SSH-specific
+    env — only git@/ssh:// URLs are SSH-authenticated."""
+    resolver.configure_ssh_handling(interactive=True)
+    src = HelmSource(repo_url="https://example.com/org/repo.git", chart="demo")
+
+    with patch("argocheck.resolver.subprocess.run") as run, \
+         patch("argocheck.resolver._ensure_ssh_agent_primed") as primed:
+        run.return_value.returncode = 0
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_dir = Path(tmp)
+            (tmp_dir / "git" / _slug(f"{src.repo_url}@HEAD")).mkdir(parents=True)
+            Path(tmp_dir / "git" / _slug(f"{src.repo_url}@HEAD") / "Chart.yaml").write_text("x")
+            _resolve_git(src, tmp_dir, require_chart=False)
+
+        primed.assert_not_called()
+
+
+def test_ensure_ssh_agent_primed_skips_spawn_when_agent_already_reachable():
+    resolver.configure_ssh_handling(interactive=True)
+
+    with patch("argocheck.resolver.subprocess.run") as run:
+        run.return_value.returncode = 0  # ssh-add -l: agent reachable
+        resolver._ensure_ssh_agent_primed()
+
+        spawn_calls = [c for c in run.call_args_list if c.args[0][0] == "ssh-agent"]
+        assert spawn_calls == []

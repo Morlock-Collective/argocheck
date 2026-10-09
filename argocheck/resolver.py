@@ -1,9 +1,13 @@
 """Resolve an Application source to a local chart directory."""
 from __future__ import annotations
 
+import atexit
 import hashlib
+import os
 import shutil
+import stat
 import subprocess
+import tempfile
 from pathlib import Path
 
 from .helm import HelmError, helm_pull, helm_repo_add, helm_repo_update
@@ -13,6 +17,119 @@ from .plugins import ResolveContext, get_registry
 
 class ResolveError(Exception):
     pass
+
+
+_GIT_CLONE_TIMEOUT = 120
+
+# Whether the current process has a controlling terminal it can prompt an SSH
+# passphrase on (the CLI) or not (the web server, which has no tty to prompt
+# against). Set once by cli.py/server.py at startup; defaults to the safe,
+# never-hang behavior for anything that doesn't call configure_ssh_handling
+# (e.g. tests).
+_INTERACTIVE = False
+
+_askpass_script: Path | None = None
+_agent_primed = False
+
+_SSH_AUTH_FAILURE_MARKERS = (
+    "Permission denied",
+    "Host key verification failed",
+    "Could not read from remote repository",
+)
+
+
+def configure_ssh_handling(interactive: bool) -> None:
+    """
+    interactive=True (CLI): a passphrase-protected SSH key is prompted for via
+    a real terminal prompt, once per process, cached in an ssh-agent for the
+    rest of the run.
+    interactive=False (web server): no controlling terminal exists to prompt
+    on, so an SSH key that needs a passphrase fails fast with an actionable
+    error instead of hanging, unless it's already unlocked in an inherited
+    ssh-agent.
+    """
+    global _INTERACTIVE
+    _INTERACTIVE = interactive
+
+
+def _is_ssh_url(repo_url: str) -> bool:
+    return repo_url.startswith("git@") or repo_url.startswith("ssh://")
+
+
+def _ensure_askpass_script() -> Path:
+    global _askpass_script
+    if _askpass_script is not None:
+        return _askpass_script
+
+    path = Path(tempfile.gettempdir()) / f"argocheck-askpass-{os.getpid()}"
+    path.write_text(
+        "#!/usr/bin/env python3\n"
+        "import getpass, sys\n"
+        'print(getpass.getpass(sys.argv[1] if len(sys.argv) > 1 else "Passphrase: "))\n',
+        encoding="utf-8",
+    )
+    path.chmod(stat.S_IRWXU)
+    atexit.register(path.unlink, missing_ok=True)
+    _askpass_script = path
+    return path
+
+
+def _ensure_ssh_agent_primed() -> None:
+    """
+    Lazily, once per process: make sure an ssh-agent is reachable (spawning
+    one if none is) and load default SSH identities into it, prompting via
+    the askpass helper if one of them is passphrase-protected. Every later
+    SSH-authenticated git clone in this process then authenticates silently
+    via that agent.
+    """
+    global _agent_primed
+    if _agent_primed:
+        return
+    _agent_primed = True
+
+    reachable = subprocess.run(
+        ["ssh-add", "-l"], capture_output=True, text=True, encoding="utf-8",
+    ).returncode in (0, 1)
+
+    if not reachable:
+        try:
+            started = subprocess.run(
+                ["ssh-agent", "-s"], capture_output=True, text=True,
+                encoding="utf-8", check=True,
+            ).stdout
+        except (FileNotFoundError, subprocess.CalledProcessError):
+            return  # no ssh-agent available; fall through, clone may still work or fail cleanly
+
+        sock = pid = None
+        for line in started.splitlines():
+            if line.startswith("SSH_AUTH_SOCK="):
+                sock = line.split("=", 1)[1].split(";", 1)[0]
+            elif line.startswith("SSH_AGENT_PID="):
+                pid = line.split("=", 1)[1].split(";", 1)[0]
+        if sock:
+            os.environ["SSH_AUTH_SOCK"] = sock
+        if pid:
+            os.environ["SSH_AGENT_PID"] = pid
+            atexit.register(
+                subprocess.run, ["ssh-agent", "-k"],
+                env={**os.environ, "SSH_AGENT_PID": pid}, capture_output=True,
+            )
+
+    subprocess.run(
+        ["ssh-add"], capture_output=True, text=True, encoding="utf-8",
+        env=_build_git_ssh_env(),
+    )
+
+
+def _build_git_ssh_env() -> dict[str, str]:
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+    if _INTERACTIVE:
+        env["SSH_ASKPASS"] = str(_ensure_askpass_script())
+        env["SSH_ASKPASS_REQUIRE"] = "force"
+        env["DISPLAY"] = os.environ.get("DISPLAY") or ":0"
+    else:
+        env["GIT_SSH_COMMAND"] = "ssh -o BatchMode=yes"
+    return env
 
 
 def resolve_source(
@@ -233,12 +350,38 @@ def _resolve_git(source: HelmSource, tmp_dir: Path, require_chart: bool, ignore_
             cmd += ["--branch", revision]
         cmd += [repo_url, str(clone_dir)]
 
+        is_ssh = _is_ssh_url(repo_url)
+        if is_ssh and _INTERACTIVE:
+            _ensure_ssh_agent_primed()
+        env = _build_git_ssh_env() if is_ssh else None
+
         try:
-            subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", check=True)
+            subprocess.run(
+                cmd, capture_output=True, text=True, encoding="utf-8", check=True,
+                env=env, timeout=_GIT_CLONE_TIMEOUT,
+            )
         except FileNotFoundError:
             raise ResolveError("git binary not found. Install git or use a local chart path.")
+        except subprocess.TimeoutExpired:
+            hint = (
+                "ssh-add the key first, then retry" if _INTERACTIVE else
+                "pre-load it into an ssh-agent before starting argocheck-web: ssh-add <path-to-key>"
+            )
+            raise ResolveError(
+                f"git clone timed out after {_GIT_CLONE_TIMEOUT}s for {repo_url!r}. "
+                f"If this repo's SSH key needs a passphrase, {hint}."
+            )
         except subprocess.CalledProcessError as e:
-            raise ResolveError(f"git clone failed for {repo_url!r}:\n{e.stderr}")
+            message = f"git clone failed for {repo_url!r}:\n{e.stderr}"
+            if (
+                not _INTERACTIVE and is_ssh and e.stderr
+                and any(marker in e.stderr for marker in _SSH_AUTH_FAILURE_MARKERS)
+            ):
+                message += (
+                    "\nThis SSH key may need a passphrase. Pre-load it before starting "
+                    "argocheck-web: ssh-add <path-to-key>"
+                )
+            raise ResolveError(message)
 
     chart_path = (clone_dir / source.path) if source.path else clone_dir
 

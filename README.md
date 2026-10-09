@@ -395,6 +395,13 @@ source:
 > Git sources need `git` on your `PATH`. argocheck clones the repo with
 > `--depth 1` into a temporary directory, and deletes it when argocheck exits.
 
+> Cloning over SSH with a passphrase-protected key: the CLI prompts for the
+> passphrase once per run and caches it in an ssh-agent, so later sources
+> using the same default SSH key don't re-prompt. The web interface has no
+> terminal to prompt on, so pre-load the key into an ssh-agent before starting
+> `argocheck-web` (`ssh-add ~/.ssh/id_ed25519`) — otherwise it fails fast with
+> an error instead of hanging.
+
 ## Helm values precedence
 
 argocheck applies values in this order (later entries override earlier
