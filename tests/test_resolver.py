@@ -180,7 +180,8 @@ def _reset_ssh_module_state():
 def test_build_git_ssh_env_non_interactive_uses_batch_mode():
     resolver.configure_ssh_handling(interactive=False)
     env = _build_git_ssh_env()
-    assert env["GIT_SSH_COMMAND"] == "ssh -o BatchMode=yes"
+    assert "-o BatchMode=yes" in env["GIT_SSH_COMMAND"]
+    assert "-o ConnectTimeout=10" in env["GIT_SSH_COMMAND"]
     assert "SSH_ASKPASS" not in env
 
 
@@ -189,8 +190,23 @@ def test_build_git_ssh_env_interactive_uses_askpass():
     env = _build_git_ssh_env()
     assert env["SSH_ASKPASS_REQUIRE"] == "force"
     assert env["DISPLAY"]
+    assert "-o ConnectTimeout=10" in env["GIT_SSH_COMMAND"]
     askpass_path = Path(env["SSH_ASKPASS"])
     assert askpass_path.exists()
+
+
+def test_build_git_ssh_env_connect_timeout_is_configurable(monkeypatch):
+    monkeypatch.setenv("ARGOCHECK_SSH_CONNECT_TIMEOUT", "30")
+    resolver.configure_ssh_handling(interactive=False)
+    env = _build_git_ssh_env()
+    assert "-o ConnectTimeout=30" in env["GIT_SSH_COMMAND"]
+
+
+def test_build_git_ssh_env_connect_timeout_falls_back_on_bad_value(monkeypatch):
+    monkeypatch.setenv("ARGOCHECK_SSH_CONNECT_TIMEOUT", "not-a-number")
+    resolver.configure_ssh_handling(interactive=False)
+    env = _build_git_ssh_env()
+    assert "-o ConnectTimeout=10" in env["GIT_SSH_COMMAND"]
 
 
 def test_resolve_git_timeout_raises_resolve_error_without_hanging():

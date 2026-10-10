@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The web interface's local-path `repoURL` warning is now a small ⚠ marker next to the app name, not a banner. Hover it for the full message.
 
 ### Fixed
-- A `git clone` over SSH no longer hangs forever when the key needs a passphrase. The CLI now prompts for it once per run. It caches the passphrase in an ssh-agent for the rest of that run, so later sources using the same default SSH key don't re-prompt. The web interface has no terminal to prompt on. It instead fails fast with a clear error telling you to `ssh-add` the key before starting `argocheck-web`. Either way, a clone attempt now always fails within 2 minutes instead of hanging indefinitely.
+- A `git clone` over SSH no longer hangs forever when the key needs a passphrase. The CLI now prompts for it once per run. It caches the passphrase in an ssh-agent for the rest of that run, so later sources using the same default SSH key don't re-prompt. The web interface has no terminal to prompt on. It instead fails fast with a clear error telling you to `ssh-add` the key before starting `argocheck-web`. A clone to an unreachable host now also fails fast, after a 10-second connection timeout (`ARGOCHECK_SSH_CONNECT_TIMEOUT` to override). Any other clone hang now always fails within 2 minutes instead of lasting indefinitely.
 
 ## [0.4.0] - 2026-09-16
 

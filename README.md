@@ -400,7 +400,9 @@ source:
 > using the same default SSH key don't re-prompt. The web interface has no
 > terminal to prompt on, so pre-load the key into an ssh-agent before starting
 > `argocheck-web` (`ssh-add ~/.ssh/id_ed25519`) — otherwise it fails fast with
-> an error instead of hanging.
+> an error instead of hanging. A clone to an unreachable host also fails fast,
+> after a 10-second connection timeout. Override it with
+> `ARGOCHECK_SSH_CONNECT_TIMEOUT` (seconds) if your network needs longer.
 
 ## Helm values precedence
 

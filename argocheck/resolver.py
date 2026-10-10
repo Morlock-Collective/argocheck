@@ -21,6 +21,17 @@ class ResolveError(Exception):
 
 _GIT_CLONE_TIMEOUT = 120
 
+
+def _ssh_connect_timeout() -> str:
+    """Seconds ssh waits to establish the TCP connection before giving up —
+    distinct from _GIT_CLONE_TIMEOUT, which bounds the whole clone. Override
+    with ARGOCHECK_SSH_CONNECT_TIMEOUT for a slow or high-latency network."""
+    value = os.environ.get("ARGOCHECK_SSH_CONNECT_TIMEOUT", "10")
+    try:
+        return str(int(value))
+    except ValueError:
+        return "10"
+
 # Whether the current process has a controlling terminal it can prompt an SSH
 # passphrase on (the CLI) or not (the web server, which has no tty to prompt
 # against). Set once by cli.py/server.py at startup; defaults to the safe,
@@ -123,12 +134,14 @@ def _ensure_ssh_agent_primed() -> None:
 
 def _build_git_ssh_env() -> dict[str, str]:
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+    ssh_opts = [f"-o ConnectTimeout={_ssh_connect_timeout()}"]
     if _INTERACTIVE:
         env["SSH_ASKPASS"] = str(_ensure_askpass_script())
         env["SSH_ASKPASS_REQUIRE"] = "force"
         env["DISPLAY"] = os.environ.get("DISPLAY") or ":0"
     else:
-        env["GIT_SSH_COMMAND"] = "ssh -o BatchMode=yes"
+        ssh_opts.append("-o BatchMode=yes")
+    env["GIT_SSH_COMMAND"] = "ssh " + " ".join(ssh_opts)
     return env
 
 
