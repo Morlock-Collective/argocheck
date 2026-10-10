@@ -21,6 +21,7 @@ from argocheck.help_content import HELP_TOPICS
 from argocheck.helm import HelmError, check_helm
 from argocheck.models import AppNode, HelmSource
 from argocheck.parser import ParseError, load_yaml_file, parse_application
+from argocheck import proc
 from argocheck.plugins import PluginRegistry, get_registry
 from argocheck.resolver import configure_ssh_handling
 from argocheck.valuetree import ValueTreeError, build_leaf_node, parse_leaves
@@ -341,7 +342,23 @@ def run(port: int, host: str, no_browser: bool) -> None:
     if not no_browser:
         threading.Timer(0.8, lambda: webbrowser.open(url)).start()
     click.echo(f"argocheck listening on {url}")
-    uvicorn.run(app, host=host, port=port, log_level="warning")
+
+    config = uvicorn.Config(app, host=host, port=port, log_level="warning")
+    server = uvicorn.Server(config)
+    # uvicorn's own SIGTERM/SIGINT handling only sets should_exit and waits
+    # for in-flight requests to finish on their own — including a /api/render
+    # blocked in a worker thread on a hung subprocess (e.g. an unanswered SSH
+    # passphrase prompt), which could otherwise make shutdown wait forever.
+    # Kill any such subprocess tree first, then let uvicorn's own shutdown
+    # (now unblocked) proceed as normal.
+    original_handle_exit = server.handle_exit
+
+    def handle_exit(sig: int, frame: object) -> None:
+        proc.kill_active()
+        original_handle_exit(sig, frame)
+
+    server.handle_exit = handle_exit
+    server.run()
 
 
 if __name__ == "__main__":

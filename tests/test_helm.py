@@ -120,7 +120,7 @@ import pytest
 
 def test_read_helm_repos_parses_helm_env(monkeypatch):
     """_read_helm_repos extracts HELM_CONFIG_HOME from `helm env` output."""
-    import subprocess
+    from argocheck import proc
     from argocheck.helm import _read_helm_repos
     import yaml, tempfile, os
 
@@ -136,7 +136,7 @@ def test_read_helm_repos_parses_helm_env(monkeypatch):
         fake_env = f'HELM_CACHE_HOME="{config_dir}/cache"\nHELM_CONFIG_HOME="{config_dir}"\nHELM_DATA_HOME="{config_dir}/data"\n'
 
         monkeypatch.setattr(
-            subprocess, "run",
+            proc, "run",
             lambda cmd, **kw: type("R", (), {"stdout": fake_env, "returncode": 0})(),
         )
 

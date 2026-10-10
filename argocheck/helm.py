@@ -9,6 +9,7 @@ from typing import Any
 
 import yaml
 
+from . import proc
 from .models import HelmSource
 from .plugins import HelmContext, get_registry
 
@@ -23,9 +24,9 @@ class HelmError(Exception):
 def check_helm() -> str:
     """Return helm version string or raise HelmError if helm is not found."""
     try:
-        result = subprocess.run(
+        result = proc.run(
             ["helm", "version", "--short"],
-            capture_output=True, text=True, encoding="utf-8", check=True,
+            text=True, encoding="utf-8", check=True,
         )
         return result.stdout.strip()
     except FileNotFoundError:
@@ -129,7 +130,7 @@ def run_template(
     )
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", check=True)
+        result = proc.run(cmd, text=True, encoding="utf-8", check=True)
     except subprocess.CalledProcessError as e:
         raise HelmError(
             f"helm template failed for release {release_name!r}",
@@ -147,7 +148,7 @@ def run_template(
 def helm_repo_add(repo_name: str, repo_url: str) -> None:
     cmd = ["helm", "repo", "add", repo_name, repo_url]
     try:
-        subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", check=True)
+        proc.run(cmd, text=True, encoding="utf-8", check=True)
     except subprocess.CalledProcessError as e:
         raise HelmError(f"helm repo add failed: {e.stderr}", cmd=cmd, stderr=e.stderr)
 
@@ -155,7 +156,7 @@ def helm_repo_add(repo_name: str, repo_url: str) -> None:
 def helm_repo_update() -> None:
     cmd = ["helm", "repo", "update"]
     try:
-        subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", check=True)
+        proc.run(cmd, text=True, encoding="utf-8", check=True)
     except subprocess.CalledProcessError as e:
         raise HelmError(f"helm repo update failed: {e.stderr}", cmd=cmd, stderr=e.stderr)
 
@@ -167,7 +168,7 @@ def helm_pull(chart_ref: str, version: str | None, dest: Path, untar: bool = Tru
     if untar:
         cmd.append("--untar")
     try:
-        subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", check=True)
+        proc.run(cmd, text=True, encoding="utf-8", check=True)
     except subprocess.CalledProcessError as e:
         raise HelmError(f"helm pull failed: {e.stderr}", cmd=cmd, stderr=e.stderr)
 
@@ -179,8 +180,8 @@ def _read_helm_repos() -> dict[str, str]:
     platforms (Linux, macOS, Windows) without replicating Helm's own path logic.
     """
     try:
-        result = subprocess.run(
-            ["helm", "env"], capture_output=True, text=True, encoding="utf-8", check=True
+        result = proc.run(
+            ["helm", "env"], text=True, encoding="utf-8", check=True
         )
     except (FileNotFoundError, subprocess.CalledProcessError):
         return {}
@@ -279,7 +280,7 @@ def _maybe_update_dependencies(chart_path: Path) -> None:
 
     cmd = ["helm", "dependency", "update", str(chart_path)]
     try:
-        subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", check=True)
+        proc.run(cmd, text=True, encoding="utf-8", check=True)
     except subprocess.CalledProcessError as e:
         raise HelmError(
             f"helm dependency update failed for {chart_path}",

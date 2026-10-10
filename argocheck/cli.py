@@ -13,6 +13,7 @@ from .helm import HelmError, check_helm
 from .models import AppNode
 from .parser import ParseError, load_yaml_file, parse_application
 from .plugins import get_registry
+from .proc import install_signal_handlers
 from .resolver import configure_ssh_handling
 from .valuetree import ValueTreeError, build_leaf_node, matches_selection, parse_leaves
 from .walker import walk
@@ -127,6 +128,7 @@ def main(
         sys.exit(1)
 
     configure_ssh_handling(interactive=True)
+    install_signal_handlers()
 
     # Verify helm is available
     try:

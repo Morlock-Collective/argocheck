@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - A `git clone` over SSH no longer hangs forever when the key needs a passphrase. The CLI now prompts for it once per run. It caches the passphrase in an ssh-agent for the rest of that run, so later sources using the same default SSH key don't re-prompt. The web interface has no terminal to prompt on. It instead fails fast with a clear error telling you to `ssh-add` the key before starting `argocheck-web`. A clone to an unreachable host now also fails fast, after a 10-second connection timeout (`ARGOCHECK_SSH_CONNECT_TIMEOUT` to override). Any other clone hang now always fails within 2 minutes instead of lasting indefinitely.
+- Stopping argocheck (Ctrl-C, or SIGTERM from a process manager) while a `git`/`helm` subprocess is running no longer leaves it as an orphan. This matters most for a hung SSH passphrase prompt: previously, killing argocheck left that prompt running in the background forever, still holding the terminal. The CLI and the web interface both now kill the whole subprocess tree before exiting.
 
 ## [0.4.0] - 2026-09-16
 

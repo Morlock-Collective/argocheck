@@ -214,7 +214,7 @@ def test_resolve_git_timeout_raises_resolve_error_without_hanging():
     src = HelmSource(repo_url="git@example.com:org/repo.git", chart="demo")
 
     with patch(
-        "argocheck.resolver.subprocess.run",
+        "argocheck.resolver.proc.run",
         side_effect=subprocess.TimeoutExpired(cmd=["git", "clone"], timeout=120),
     ):
         with tempfile.TemporaryDirectory() as tmp:
@@ -230,7 +230,7 @@ def test_resolve_git_non_interactive_auth_failure_includes_ssh_add_hint():
         returncode=128, cmd=["git", "clone"],
         output="", stderr="Permission denied (publickey).\n",
     )
-    with patch("argocheck.resolver.subprocess.run", side_effect=error):
+    with patch("argocheck.resolver.proc.run", side_effect=error):
         with tempfile.TemporaryDirectory() as tmp:
             with pytest.raises(ResolveError, match="ssh-add"):
                 _resolve_git(src, Path(tmp), require_chart=True)
@@ -242,7 +242,7 @@ def test_resolve_git_https_url_never_touches_ssh_env():
     resolver.configure_ssh_handling(interactive=True)
     src = HelmSource(repo_url="https://example.com/org/repo.git", chart="demo")
 
-    with patch("argocheck.resolver.subprocess.run") as run, \
+    with patch("argocheck.resolver.proc.run") as run, \
          patch("argocheck.resolver._ensure_ssh_agent_primed") as primed:
         run.return_value.returncode = 0
         with tempfile.TemporaryDirectory() as tmp:
@@ -257,7 +257,7 @@ def test_resolve_git_https_url_never_touches_ssh_env():
 def test_ensure_ssh_agent_primed_skips_spawn_when_agent_already_reachable():
     resolver.configure_ssh_handling(interactive=True)
 
-    with patch("argocheck.resolver.subprocess.run") as run:
+    with patch("argocheck.resolver.proc.run") as run:
         run.return_value.returncode = 0  # ssh-add -l: agent reachable
         resolver._ensure_ssh_agent_primed()
 

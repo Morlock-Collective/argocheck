@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from . import proc
 from .helm import HelmError, helm_pull, helm_repo_add, helm_repo_update
 from .models import HelmSource
 from .plugins import ResolveContext, get_registry
@@ -20,6 +21,7 @@ class ResolveError(Exception):
 
 
 _GIT_CLONE_TIMEOUT = 120
+_SSH_ADD_TIMEOUT = 120  # bounds an unanswered askpass passphrase prompt
 
 
 def _ssh_connect_timeout() -> str:
@@ -98,17 +100,17 @@ def _ensure_ssh_agent_primed() -> None:
         return
     _agent_primed = True
 
-    reachable = subprocess.run(
-        ["ssh-add", "-l"], capture_output=True, text=True, encoding="utf-8",
+    reachable = proc.run(
+        ["ssh-add", "-l"], text=True, encoding="utf-8", timeout=10,
     ).returncode in (0, 1)
 
     if not reachable:
         try:
-            started = subprocess.run(
-                ["ssh-agent", "-s"], capture_output=True, text=True,
-                encoding="utf-8", check=True,
+            started = proc.run(
+                ["ssh-agent", "-s"], text=True,
+                encoding="utf-8", check=True, timeout=10,
             ).stdout
-        except (FileNotFoundError, subprocess.CalledProcessError):
+        except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
             return  # no ssh-agent available; fall through, clone may still work or fail cleanly
 
         sock = pid = None
@@ -122,14 +124,17 @@ def _ensure_ssh_agent_primed() -> None:
         if pid:
             os.environ["SSH_AGENT_PID"] = pid
             atexit.register(
-                subprocess.run, ["ssh-agent", "-k"],
-                env={**os.environ, "SSH_AGENT_PID": pid}, capture_output=True,
+                proc.run, ["ssh-agent", "-k"],
+                env={**os.environ, "SSH_AGENT_PID": pid}, timeout=10,
             )
 
-    subprocess.run(
-        ["ssh-add"], capture_output=True, text=True, encoding="utf-8",
-        env=_build_git_ssh_env(),
-    )
+    try:
+        proc.run(
+            ["ssh-add"], text=True, encoding="utf-8",
+            env=_build_git_ssh_env(), timeout=_SSH_ADD_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        pass  # passphrase never entered; fall through, the clone itself still times out cleanly
 
 
 def _build_git_ssh_env() -> dict[str, str]:
@@ -268,9 +273,9 @@ def _resolve_local_git(repo_path: Path, revision: str, tmp_dir: Path) -> Path:
     (e.g. a branch got new commits) since the last run, it's re-cloned.
     """
     try:
-        target_sha = subprocess.run(
+        target_sha = proc.run(
             ["git", "-C", str(repo_path), "rev-parse", revision],
-            capture_output=True, text=True, encoding="utf-8", check=True,
+            text=True, encoding="utf-8", check=True,
         ).stdout.strip()
     except subprocess.CalledProcessError as e:
         raise ResolveError(
@@ -281,9 +286,9 @@ def _resolve_local_git(repo_path: Path, revision: str, tmp_dir: Path) -> Path:
 
     if dest.exists():
         try:
-            cached_sha = subprocess.run(
+            cached_sha = proc.run(
                 ["git", "-C", str(dest), "rev-parse", "HEAD"],
-                capture_output=True, text=True, encoding="utf-8", check=True,
+                text=True, encoding="utf-8", check=True,
             ).stdout.strip()
         except subprocess.CalledProcessError:
             # Corrupt or partial cache (e.g. an interrupted previous run) — discard
@@ -295,9 +300,9 @@ def _resolve_local_git(repo_path: Path, revision: str, tmp_dir: Path) -> Path:
 
     dest.parent.mkdir(parents=True, exist_ok=True)
     try:
-        subprocess.run(
+        proc.run(
             ["git", "clone", "--quiet", str(repo_path), str(dest)],
-            capture_output=True, text=True, encoding="utf-8", check=True,
+            text=True, encoding="utf-8", check=True,
         )
     except subprocess.CalledProcessError as e:
         raise ResolveError(
@@ -305,9 +310,9 @@ def _resolve_local_git(repo_path: Path, revision: str, tmp_dir: Path) -> Path:
         )
 
     try:
-        subprocess.run(
+        proc.run(
             ["git", "-C", str(dest), "checkout", "--quiet", "--detach", target_sha],
-            capture_output=True, text=True, encoding="utf-8", check=True,
+            text=True, encoding="utf-8", check=True,
         )
     except subprocess.CalledProcessError as e:
         shutil.rmtree(dest)
@@ -369,8 +374,8 @@ def _resolve_git(source: HelmSource, tmp_dir: Path, require_chart: bool, ignore_
         env = _build_git_ssh_env() if is_ssh else None
 
         try:
-            subprocess.run(
-                cmd, capture_output=True, text=True, encoding="utf-8", check=True,
+            proc.run(
+                cmd, text=True, encoding="utf-8", check=True,
                 env=env, timeout=_GIT_CLONE_TIMEOUT,
             )
         except FileNotFoundError:
