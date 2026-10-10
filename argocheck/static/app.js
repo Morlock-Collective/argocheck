@@ -1756,7 +1756,10 @@ const rootApp = createApp({
       <main class="main">
 
         <div v-if="isRendering" class="loading">
-          <div class="spinner"></div>
+          <div class="spinner-parent">
+            <span class="logo-icon" />
+            <div class="spinner" ></div>
+          </div>
           <p>Running helm template…</p>
         </div>
 

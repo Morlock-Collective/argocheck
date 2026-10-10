@@ -604,9 +604,16 @@ body {
   font-size: 0.9rem;
   max-width: 36rem;
 }
+.spinner-parent {
+  display: grid;
+}
+.spinner-parent > * {
+  grid-area: 1 / 1;
+  place-self: center;
+}
 .spinner {
-  width: 2rem;
-  height: 2rem;
+  width: 6rem;
+  height: 6rem;
   border: 3px solid var(--border);
   border-top-color: var(--primary);
   border-radius: 50%;
