@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.5.0] - 2026-10-11
 
 ### Added
 - Diff mode's "Applications" option, next to the other display controls, controls how each matched app pair's own Application diff factors in. Choices: Include Applications (default), Ignore differing Applications (drop it when it would show Differs, e.g. two branches that just point at different revisions), or Ignore all Applications. Never affects an app that's Only in A or Only in B.
