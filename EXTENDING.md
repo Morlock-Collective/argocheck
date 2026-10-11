@@ -145,6 +145,38 @@ actually influence what renders, mutate the payload from
 `renderInterceptors.beforeRequest` as above — `context` itself can't be
 written to, so plugins can't fight over shared core state.
 
+## Hiding built-in UI
+
+If your plugin's own sidebar section replaces a built-in one — your own
+root picker instead of the plain path input, say, or your own parameter UI
+instead of Options/Environment map — showing both at once is confusing.
+`registry.hiddenSections` is a plain object of booleans, one per built-in
+piece, reactive to changes made at any time (not just at registration):
+
+```js
+window.argocheckPlugin(function (registry) {
+  registry.hiddenSections.pathInput = true;  // your own picker replaces it
+  registry.hiddenSections.options = true;
+  registry.hiddenSections.envMap = true;
+});
+```
+
+The available keys are `pathInput`, `recents`, `browser`, `options`,
+`diff`, `envMap` — the root path input and the five built-in sidebar
+sections. Since this is a plain reactive object, you can also flip these
+from inside your own sidebar component once it decides it recognizes the
+picked repo, rather than hiding them unconditionally:
+
+```js
+watch: {
+  "context.rootPath"(path) {
+    this.recognized = /* ...detect... */;
+    registry.hiddenSections.options = this.recognized;
+    registry.hiddenSections.envMap = this.recognized;
+  },
+}
+```
+
 ## Example: a config-repo plugin
 
 A common shape for an org-specific plugin: a standardized "app-of-apps"

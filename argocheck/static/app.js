@@ -1,5 +1,5 @@
 "use strict";
-const { createApp, ref, computed, watch, onMounted, onUnmounted, nextTick } = Vue;
+const { createApp, ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } = Vue;
 
 // ── Plugin registry (see argocheck.plugins / EXTENDING.md) ─────────────────
 //
@@ -12,6 +12,14 @@ const pluginRegistry = {
   sidebarSections: [],    // { title, component }
   renderInterceptors: [], // { beforeRequest?(req), afterResult?(result) }
   helpTopics: [],         // { id, title, blocks }
+  // Set any of these true (at registration time, or later — e.g. once a
+  // plugin recognizes the picked path as its own) to hide the matching
+  // built-in UI piece, when it would otherwise be distracting or conflict
+  // with a plugin's own replacement for it. Reactive, so a later change
+  // (not just the initial value) re-renders the page.
+  hiddenSections: reactive({
+    pathInput: false, recents: false, browser: false, options: false, diff: false, envMap: false,
+  }),
   addSidebarSection(section) { this.sidebarSections.push(section); },
   addRenderInterceptor(interceptor) { this.renderInterceptors.push(interceptor); },
   addHelpTopics(topics) { this.helpTopics.push(...topics); },
@@ -1484,6 +1492,7 @@ const rootApp = createApp({
       rootPath, recents, isRendering, renderResult, topError,
       selectedApp, options, sections,
       pluginSidebarSections, pluginSectionOpen, togglePluginSection, pluginContext,
+      hiddenSections: pluginRegistry.hiddenSections,
       flat, prefixes, selectedNode, selectedEntry,
       totalApps, totalResources, totalErrors,
       selectedApps, selectedResources, selectedErrors,
@@ -1517,7 +1526,7 @@ const rootApp = createApp({
         </div>
 
         <!-- Path input -->
-        <div class="path-section">
+        <div class="path-section" v-if="!hiddenSections.pathInput">
           <label class="path-label">Root Application manifest or chart directory</label>
           <input class="path-input" v-model="rootPath"
                  placeholder="/path/to/root-app.yaml or chart dir"
@@ -1526,7 +1535,7 @@ const rootApp = createApp({
         </div>
 
         <!-- Recent files -->
-        <div class="sidebar-section" v-if="recents.length">
+        <div class="sidebar-section" v-if="recents.length && !hiddenSections.recents">
           <button class="section-header" @click="sections.recents = !sections.recents">
             Recent ({{ recents.length }})
             <i class="section-chevron" :class="{open: sections.recents}">›</i>
@@ -1543,7 +1552,7 @@ const rootApp = createApp({
         </div>
 
         <!-- File browser -->
-        <div class="sidebar-section">
+        <div class="sidebar-section" v-if="!hiddenSections.browser">
           <button class="section-header" @click="sections.browser = !sections.browser">
             Browse…
             <i class="section-chevron" :class="{open: sections.browser}">›</i>
@@ -1554,7 +1563,7 @@ const rootApp = createApp({
         </div>
 
         <!-- Options -->
-        <div class="sidebar-section">
+        <div class="sidebar-section" v-if="!hiddenSections.options">
           <div class="section-header with-help">
             <button class="section-header-toggle" @click="sections.options = !sections.options">
               Options
@@ -1584,7 +1593,7 @@ const rootApp = createApp({
         </div>
 
         <!-- Environment map (optional multi-environment fan-out add-on) -->
-        <div class="sidebar-section">
+        <div class="sidebar-section" v-if="!hiddenSections.envMap">
           <div class="section-header checkable">
             <input type="checkbox" v-model="envMapEnabled" @click.stop title="Enable environment map">
             <button class="section-header-toggle" @click="sections.envMap = !sections.envMap">
@@ -1682,7 +1691,7 @@ const rootApp = createApp({
         </button>
 
         <!-- Diff mode (shown after a render) -->
-        <div class="sidebar-section" v-if="renderResult">
+        <div class="sidebar-section" v-if="renderResult && !hiddenSections.diff">
           <div class="section-header checkable">
             <input type="checkbox" v-model="diffMode" @click.stop title="Compare two branches">
             <button class="section-header-toggle" @click="sections.diff = !sections.diff">
