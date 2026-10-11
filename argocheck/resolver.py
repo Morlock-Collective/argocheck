@@ -169,7 +169,10 @@ def resolve_source(
     and rendered, never the rendered output's own values (an --argocd-env
     render's ARGOCD_APP_SOURCE_TARGET_REVISION is unaffected).
     """
-    context = ResolveContext(working_dir=working_dir, tmp_dir=tmp_dir, require_chart=require_chart)
+    context = ResolveContext(
+        working_dir=working_dir, tmp_dir=tmp_dir, require_chart=require_chart,
+        ignore_target_revision=ignore_target_revision,
+    )
     plugin_path = get_registry().resolve_source(source, context)
     if plugin_path is not None:
         return plugin_path

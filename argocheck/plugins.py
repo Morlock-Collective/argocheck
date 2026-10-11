@@ -36,6 +36,7 @@ class ResolveContext:
     working_dir: Path | None
     tmp_dir: Path
     require_chart: bool
+    ignore_target_revision: bool
 
 
 @dataclass

@@ -978,6 +978,14 @@ const rootApp = createApp({
     function togglePluginSection(title) {
       pluginSectionOpen.value[title] = !pluginSectionOpen.value[title];
     }
+    // Read-only view of core state for plugin sidebar-section components, so
+    // one can react to the same root path (e.g. recognize a repo it owns)
+    // without a parallel picker. A plugin still goes through the existing
+    // renderInterceptors.beforeRequest to influence what actually renders.
+    const pluginContext = {
+      rootPath: computed(() => rootPath.value),
+      isRendering: computed(() => isRendering.value),
+    };
 
     // ── Help modal
     const helpTopics  = ref([]);
@@ -1475,7 +1483,7 @@ const rootApp = createApp({
     return {
       rootPath, recents, isRendering, renderResult, topError,
       selectedApp, options, sections,
-      pluginSidebarSections, pluginSectionOpen, togglePluginSection,
+      pluginSidebarSections, pluginSectionOpen, togglePluginSection, pluginContext,
       flat, prefixes, selectedNode, selectedEntry,
       totalApps, totalResources, totalErrors,
       selectedApps, selectedResources, selectedErrors,
@@ -1728,7 +1736,7 @@ const rootApp = createApp({
             <i class="section-chevron" :class="{open: pluginSectionOpen[section.title]}">›</i>
           </button>
           <div v-if="pluginSectionOpen[section.title]" class="section-body">
-            <component :is="section.component"></component>
+            <component :is="section.component" :context="pluginContext"></component>
           </div>
         </div>
 

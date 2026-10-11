@@ -39,7 +39,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 def test_empty_registry_is_a_pure_passthrough():
     registry = PluginRegistry([])
     doc = {"kind": "Application"}
-    context = ResolveContext(working_dir=None, tmp_dir=Path("/tmp"), require_chart=True)
+    context = ResolveContext(working_dir=None, tmp_dir=Path("/tmp"), require_chart=True, ignore_target_revision=False)
 
     assert registry.transform_application(doc) is doc
     assert registry.resolve_source(object(), context) is None
@@ -64,7 +64,7 @@ def test_transform_application_chains_through_every_plugin():
 
 
 def test_resolve_source_first_non_none_wins():
-    context = ResolveContext(working_dir=None, tmp_dir=Path("/tmp"), require_chart=True)
+    context = ResolveContext(working_dir=None, tmp_dir=Path("/tmp"), require_chart=True, ignore_target_revision=False)
 
     class Abstains(ArgocheckPlugin):
         def resolve_source(self, source, context):

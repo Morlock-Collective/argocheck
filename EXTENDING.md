@@ -125,6 +125,148 @@ Python-side `after_walk` hook attached via `node.extra` comes back on each
 node in the `/api/render` response, so a sidebar/render-interceptor component
 can read it from there.
 
+Your component also receives a read-only `context` prop, so it can react to
+the same state the built-in UI uses instead of running a disconnected copy
+of it:
+
+```js
+component: {
+  props: ["context"],
+  template: "<div>Current root: {{ context.rootPath }}</div>",
+  watch: {
+    "context.rootPath"(path) { /* react to what the user picked */ },
+  },
+}
+```
+
+`context.rootPath` and `context.isRendering` are both read-only computed
+values mirroring the root path input and the in-flight-render state. To
+actually influence what renders, mutate the payload from
+`renderInterceptors.beforeRequest` as above — `context` itself can't be
+written to, so plugins can't fight over shared core state.
+
+## Example: a config-repo plugin
+
+A common shape for an org-specific plugin: a standardized "app-of-apps"
+chart lives in one shared repo, and developers only work in separate config
+repos that don't themselves contain that chart. The plugin's job is to let
+someone point argocheck at their config repo directly, recognize it,
+fetch/cache the shared chart, and derive render parameters (e.g. cluster and
+namespace) from the repo's own layout instead of a hand-written Application
+manifest or environment map.
+
+None of this needs new argocheck hooks — it combines the ones already
+above:
+
+**1. Recognize the repo and discover its options**, via your own endpoint
+(`register_routes`) — ordinary filesystem code, nothing argocheck-specific:
+
+```python
+def register_routes(self, app):
+    @app.get("/api/myorg/detect")
+    def detect(path: str):
+        repo = Path(path)
+        if not (repo / ".myorg-repo.yaml").exists():
+            return {"recognized": False}
+        clusters = sorted(p.name for p in (repo / "clusters").iterdir() if p.is_dir())
+        return {"recognized": True, "clusters": clusters}
+```
+
+**2. Fetch/cache the shared chart once**, via `resolve_source` — recognize
+your own convention (a literal URL, a custom scheme, whatever you choose)
+and return a path from your own persistent cache instead of argocheck's
+default per-run temp directory:
+
+```python
+import fcntl, hashlib
+
+_CACHE_ROOT = Path.home() / ".cache" / "myorg-argocheck"
+
+def resolve_source(self, source, context):
+    if source.repo_url != OUR_AOA_CHART_URL:
+        return None
+    dest = _CACHE_ROOT / hashlib.sha1(source.repo_url.encode()).hexdigest()[:12]
+    lock_file = _CACHE_ROOT / f"{dest.name}.lock"
+    _CACHE_ROOT.mkdir(parents=True, exist_ok=True)
+    with open(lock_file, "w") as lf:
+        fcntl.flock(lf, fcntl.LOCK_EX)  # serialize concurrent first-time downloads
+        if not (dest / "Chart.yaml").exists():
+            download_chart(source.repo_url, dest)  # your own git clone/helm pull
+    return dest
+```
+
+This caching and locking is entirely your plugin's own responsibility —
+argocheck has no opinion on where or how you persist it, beyond the `Path`
+you return. A simple `fcntl`-based lock (as above) is enough to stop two
+concurrent web requests from racing into a half-downloaded chart. It's
+POSIX-only, which is fine for a local dev tool.
+
+**3. Derive parameters from the repo layout**, as a plain dict matching the
+environment-map shape documented in the "Environment maps" guide topic
+(`argocheck_root`/`argocheck_leaf_depth`/`argocheck_variable_mappings`) —
+nothing downstream cares whether that dict came from a YAML file a human
+wrote or one your endpoint assembled from `clusters/<cluster>/<namespace>/`
+directories:
+
+```python
+import yaml
+
+def build_env_map_yaml(repo: Path) -> str:
+    clusters = {c.name: {n.name: {} for n in c.iterdir() if n.is_dir()}
+                for c in (repo / "clusters").iterdir() if c.is_dir()}
+    return yaml.dump({
+        "argocheck_root": "clusters",
+        "argocheck_leaf_depth": 2,
+        "argocheck_variable_mappings": {1: "cluster", 2: "namespace"},
+        "clusters": clusters,
+    })
+```
+
+**4. Wire it into the existing Render button**, from your sidebar component:
+watch `context.rootPath`, call your `/api/myorg/detect` endpoint, and if
+recognized, show your own cluster/namespace pickers in place of the normal
+flow. On render, a `renderInterceptor.beforeRequest` sets the already-cached
+chart directory as `payload.path` and your derived map as
+`payload.env_map_yaml`. Both are existing `RenderRequest` fields, so this
+needs no new server-side plumbing:
+
+```js
+window.argocheckPlugin(function (registry) {
+  let selection = null;  // written by the sidebar component below
+
+  registry.addSidebarSection({
+    title: "My Org",
+    component: {
+      props: ["context"],
+      data() { return { recognized: false, clusters: [] }; },
+      watch: {
+        async "context.rootPath"(path) {
+          const info = await fetch(`/api/myorg/detect?path=${encodeURIComponent(path)}`).then(r => r.json());
+          this.recognized = info.recognized;
+          this.clusters = info.clusters ?? [];
+        },
+      },
+      methods: {
+        pick(cluster, namespace) { selection = { cluster, namespace }; },
+      },
+      template: `<div v-if="recognized">...cluster/namespace pickers calling pick()...</div>`,
+    },
+  });
+
+  registry.addRenderInterceptor({
+    beforeRequest(req) {
+      if (selection) {
+        req.path = /* the cached chart directory your backend resolved */;
+        req.env_map_yaml = /* the YAML your backend derived for `selection` */;
+      }
+    },
+  });
+});
+```
+
+The user still clicks the same Render button the rest of the app uses. The
+plugin only ever influences the payload that button sends.
+
 ## What's not covered (yet)
 
 No hooks exist yet for the per-app detail panel or the resource viewer

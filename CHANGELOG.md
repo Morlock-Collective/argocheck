@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 - Diff mode's "Applications" option, next to the other display controls, controls how each matched app pair's own Application diff factors in. Choices: Include Applications (default), Ignore differing Applications (drop it when it would show Differs, e.g. two branches that just point at different revisions), or Ignore all Applications. Never affects an app that's Only in A or Only in B.
+- A plugin's sidebar section (`registry.addSidebarSection`) now receives a read-only `context` prop: `context.rootPath` and `context.isRendering`. It can react to the root path the user already picked, instead of running a disconnected copy of that state. See `EXTENDING.md`'s new config-repo-plugin example.
+- `ArgocheckPlugin.resolve_source`'s `context` now also carries `ignore_target_revision`, matching the flag `resolver.resolve_source()` itself already took.
 
 ### Changed
 - The web interface's local-path `repoURL` warning is now a small ⚠ marker next to the app name, not a banner. Hover it for the full message.
